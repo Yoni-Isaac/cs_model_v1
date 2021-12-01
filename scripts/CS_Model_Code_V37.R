@@ -56,12 +56,12 @@ cs_model=function(in_param)
     DEM_line_thickness=0.2
     Save_as_PowerPoint=paste0(Background_path,'/CS_Model_V01/Products/hydrology_cs.pptx')
     Use_tamplate =F
-    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_AS.csv'))$V1) ;str_i=1 #NULL #
+    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_ES.csv'))$V1) ;str_i=1 #NULL #
     geological_cs_surf="geomap"# geomap # "geomap_free_colors" # "blind"
     country="Israel" # "Indefinite"
     geology_200=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_200_V4.shp"))
     geology_50=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_50_V6.shp"))
-    additional_layers_lst=list()
+    additional_layers_lst=list(raster("G:/Geohydrology/Apps/External_Data/eaocen_rst_old.tif"))
   }
   
   # 1.1.2 GIS Data - Serves Application ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -110,7 +110,7 @@ cs_model=function(in_param)
   
   dem_pth = "data/DEMs"
   drawn_polygon=st_buffer(drawn_polyline,dist=1000,crs=4326)
-  actiev_library_n=str_split(Background,"\\s") %>% as.data.table() %>% t(.) %>% as.data.table()
+  actiev_library_n=str_split(Background,"//s") %>% as.data.table() %>% t(.) %>% as.data.table()
   
   if(country=="Israel" & exists("DTM_rst",where=additional_layers_lst)==F){
     DTM_rst=raster::crop(raster(paste0(dem_pth,"/DTM.tif")),drawn_polygon)
@@ -149,6 +149,15 @@ cs_model=function(in_param)
     }
     static_DEM_i=i
   }
+  
+  # Edit 01022021 s#######################
+if(exists("DEM_rst",where=additional_layers_lst)==T) {
+  DEM_rst_i=raster::crop(additional_layers_lst$DEM_rst,drawn_polygon)
+  names(DEM_rst_i)="user_geology_layer"
+  DEMs.list[i+1]=DEM_rst_i
+}
+  # Edit 01022021 e#######################
+  
   
   # 1.2.2 DEMs - Dynamic ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   message("1.2.2 DEMs - Dynamic")
