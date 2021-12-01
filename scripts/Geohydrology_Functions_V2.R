@@ -1240,7 +1240,8 @@ ColourExpreation_DEM=function(){
           Upper_Judah_Top = "#80FF00",
           Lower_Jodea_Top = "#CFDE9A",
           Kurnub_Top = "#F5B6B0",
-          Kurnub_Base = "#3C7DC4"#,
+          Kurnub_Base = "#3C7DC4",
+          user_geology_layer = "#FF0000"#,
           )
         
 }
