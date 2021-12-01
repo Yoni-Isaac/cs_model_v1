@@ -948,6 +948,7 @@ server <- function(input, output, session) {
       if(as.character(crs(DEM_rst))!="+proj=longlat +datum=WGS84 +no_defs"){
         DEM_rst=projectRaster(DTM_rst, crs = 4326)
       }
+      names(DEM_rst)="user_geology_layer"
       additional_layers_lst$DEM_rst=DEM_rst
       additional_layers_lst<<-additional_layers_lst
     }

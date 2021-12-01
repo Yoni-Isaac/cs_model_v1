@@ -61,7 +61,7 @@ cs_model=function(in_param)
     country="Israel" # "Indefinite"
     geology_200=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_200_V4.shp"))
     geology_50=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_50_V6.shp"))
-    additional_layers_lst=list(raster("G:/Geohydrology/Apps/External_Data/eaocen_rst_old.tif"))
+    additional_layers_lst=readRDS(file="G:/Geohydrology/Apps/External_Data/QA_elements/additional_geology_ES_rast.RData") # list()
   }
   
   # 1.1.2 GIS Data - Serves Application ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -153,8 +153,10 @@ cs_model=function(in_param)
   # Edit 01022021 s#######################
 if(exists("DEM_rst",where=additional_layers_lst)==T) {
   DEM_rst_i=raster::crop(additional_layers_lst$DEM_rst,drawn_polygon)
-  names(DEM_rst_i)="user_geology_layer"
   DEMs.list[i+1]=DEM_rst_i
+  static_DEM_i=i+1
+  dplyr::filter(Static_Background,is.na(basin))
+  DEMs.files=bind_rows(DEMs.files,)
 }
   # Edit 01022021 e#######################
   
@@ -420,6 +422,7 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     }
   }
   tictoc::toc()
+  aa=1
   # 2.7 DEM layers - Dynamic ------------------------------------------------------------------
   message("2.7 DEM layers - Dynamic")
   
