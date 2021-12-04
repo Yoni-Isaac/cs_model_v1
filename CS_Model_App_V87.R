@@ -603,6 +603,7 @@ server <- function(input, output, session) {
                               "Coastal"="coastal",
                               "Westren Mt."="westren",
                               "Eastren Mt."="eastren",
+                              "North Eastren Mt."="north_eastren",
                               "Shkhem-Tubas"="Shkhem_Tubas",
                               "Negev-Arava"="negev_arava",
                               "Arava-Sinai"="Arava_Sinai",

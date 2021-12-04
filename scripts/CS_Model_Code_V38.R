@@ -44,7 +44,7 @@ cs_model=function(in_param)
     cs_id="A"
     well_id="shd_id"
     CS_type="groups" # materials ; formations ; groups
-    Build_Solids=F
+    Build_Solids=T
     Projection_Line=T
     Buffer=2
     label_size=30
@@ -56,12 +56,12 @@ cs_model=function(in_param)
     DEM_line_thickness=0.2
     Save_as_PowerPoint=paste0(Background_path,'/CS_Model_V01/Products/hydrology_cs.pptx')
     Use_tamplate =F
-    Background=NULL #as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_ES.csv'))$V1) ;str_i=1 #NULL #
+    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_NES.csv'))$V1) ;str_i=1 #NULL #
     geological_cs_surf="geomap"# geomap # "geomap_free_colors" # "blind"
     country="Israel" # "Indefinite"
     geology_200=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_200_V4.shp"))
     geology_50=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_50_V6.shp"))
-    additional_layers_lst=readRDS(file="G:/Geohydrology/Apps/External_Data/QA_elements/additional_geology_ES_rast.RData") # list()
+    additional_layers_lst=list() # readRDS(file="G:/Geohydrology/Apps/External_Data/QA_elements/additional_geology_ES_rast.RData") # list()
   }
   
   # 1.1.2 GIS Data - Serves Application ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -980,7 +980,7 @@ cs_model=function(in_param)
     #draw_image(GSI_logo,.90, .08, GSIlogosize, GSIlogosize)+
     draw_image(CRSlogo,.86, .05, .14, 1.75)+
     draw_text("Product of CSMS software",
-              color = "blue",fontface="italic", size = 11, x=.925, y=.87)+
+              color = "blue",fontface="italic", size = 11, x=.925, y=.87) +
     draw_text(credits,color = "black",fontface="italic", size = GSItxtsize, x=0.09, y=c(0.09,0.07),hjust =0)
   
   # 4.4 Editable Cross section as .pptx -------------------------------------------------------------------

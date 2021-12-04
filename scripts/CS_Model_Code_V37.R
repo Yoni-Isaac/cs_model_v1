@@ -44,7 +44,7 @@ cs_model=function(in_param)
     cs_id="A"
     well_id="shd_id"
     CS_type="groups" # materials ; formations ; groups
-    Build_Solids=T
+    Build_Solids=F
     Projection_Line=T
     Buffer=2
     label_size=30
@@ -56,7 +56,7 @@ cs_model=function(in_param)
     DEM_line_thickness=0.2
     Save_as_PowerPoint=paste0(Background_path,'/CS_Model_V01/Products/hydrology_cs.pptx')
     Use_tamplate =F
-    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_ES.csv'))$V1) ;str_i=1 #NULL #
+    Background=NULL #as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_ES.csv'))$V1) ;str_i=1 #NULL #
     geological_cs_surf="geomap"# geomap # "geomap_free_colors" # "blind"
     country="Israel" # "Indefinite"
     geology_200=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_200_V4.shp"))
@@ -107,7 +107,6 @@ cs_model=function(in_param)
   }
   # 1.2 Background layers --------------------------------------------------------------------------------
   message("1.2 Background layers")
-  
   dem_pth = "data/DEMs"
   drawn_polygon=st_buffer(drawn_polyline,dist=1000,crs=4326)
   actiev_library_n=str_split(Background,"//s") %>% as.data.table() %>% t(.) %>% as.data.table()
@@ -150,19 +149,25 @@ cs_model=function(in_param)
     static_DEM_i=i
   }
   
-  # Edit 01022021 s#######################
-if(exists("DEM_rst",where=additional_layers_lst)==T) {
-  DEM_rst_i=raster::crop(additional_layers_lst$DEM_rst,drawn_polygon)
-  DEMs.list[i+1]=DEM_rst_i
-  static_DEM_i=i+1
-  dplyr::filter(Static_Background,is.na(basin))
-  DEMs.files=bind_rows(DEMs.files,)
-}
-  # Edit 01022021 e#######################
+  if(exists("DEM_rst",where=additional_layers_lst)==T) {
+    # 1.2.2 DEMs - Additional ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("1.2.2 DEMs - Additional")  
+    if(NROW(actiev_library_n)==0){
+      DEMs.list=list()
+      i=0
+      Static_Background = as.data.table(read_excel(paste0(dem_pth,"/DEMs_md_V2.xlsx"),sheet = "Static_Background"))
+      DEMs.files=dplyr::filter(Static_Background,basin=="NULL")
+    } else {
+      DEMs.files=bind_rows(DEMs.files,dplyr::filter(Static_Background,basin=="NULL")) 
+    }
+    DEM_rst_i=raster::crop(additional_layers_lst$DEM_rst,drawn_polygon)
+    DEMs.list[i+1]=DEM_rst_i
+    static_DEM_i=i+1
+  }
   
   
-  # 1.2.2 DEMs - Dynamic ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  message("1.2.2 DEMs - Dynamic")
+  # 1.2.3 DEMs - Dynamic ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("1.2.3 DEMs - Dynamic")
   D_DEMs.files=NULL
   if(NROW(actiev_library_n)>0){
     
@@ -200,8 +205,8 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     }
   }
   
-  # 1.2.3 Wells ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  message("1.2.3 Wells")
+  # 1.2.4 Wells ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("1.2.4 Wells")
   
   well_pth='data/Background_layers/Wells'
   
@@ -304,7 +309,7 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
                                  subset(CS_model_system_unit_dst,,c(setdiff(names(CS_model_system_unit_dst),names(CS_model_system)),"well_id"))
                                  ,by="well_id") %>%
     dplyr::arrange(dst,well_id,top_layer)
- 
+  
   # 2.3 Perfortations layer ----------------------------------------------------
   message("2.3 Perfortations layer")
   
@@ -333,10 +338,10 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     T_alpha=0
   }
   
-  # 2.5 WL and Cl layer --------------------------------------------------------
+  # 2.4 WL and Cl layer --------------------------------------------------------
   message("2.4 WL and Cl layer")
   
-  # 2.5.1 Wl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # 2.4.1 Wl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   message("2.4.1 Wl")
   
   # Optional - Specific year - seasonal WL values
@@ -360,7 +365,7 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     left_join(.,dst_unit,by="well_id")
   
   
-  # 2.5.2 Cl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # 2.4.2 Cl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   message("2.4.2 Cl")
   
   # Optional - Specific year - seasonal WL values
@@ -388,15 +393,15 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
   
   cl_0=mean(CS_model_system_unit$bot)
   
-  # 2.5.3 WLCl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # 2.4.3 WLCl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   message("2.4.3 WLCl")
   
   wlcl_CS=full_join(wl_CS,cl_CS, by = c("well_id", "dst")) %>%
     left_join(.,subset(CS_model_system_unit,,c("well_id","bot","top")), by = "well_id") %>%   # Set cl position in the CS
     mutate(cl_location=ifelse(is.na(wl)==T,rowMeans(cbind(top,bot),na.rm=T),wl),
            wl=as.numeric(wl))
-  # 2.6 DEM layers -------------------------------------------------------------
-  message("2.6.2 Build all DEMs Lines")
+  # 2.5 DEM layers -------------------------------------------------------------
+  message("2.5 Build all DEMs Lines")
   
   # Populate first DEM by the DTM
   CS_points_sdf=as_Spatial(subset(seg_pnt,,c("id"))) 
@@ -409,35 +414,35 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     DEMs=cbind(DEMs,maDTM) %>% mutate(DTM=maDTM)
     DEMs=dplyr::select(DEMs,-starts_with("maDTM"))
   }
-  
+   bb=1
   # Add rasters by loop
-  tictoc::tic()
-  if(NROW(actiev_library_n)>0){
+  if(NROW(actiev_library_n)>0 | exists("DEM_rst",where=additional_layers_lst)==T){
     for(i in 1:static_DEM_i){
       print(i)
+      DEMs.list[[i]]= raster("G:/Geohydrology/Apps/External_Data/eaocen_rst_old.tif")
       DEM_ID=as.character(DEMs.files$name[i])
       dem_i = data.frame(dem_i_elv=as.numeric(raster::extract(DEMs.list[[i]],
                                                               CS_points_sdf,cellnumbers=T,sp=F,along=T)[,2]))
       DEMs=cbind(DEMs,dem_i) %>% mutate(DEMs, "{DEM_ID}":=ifelse(dem_i_elv>DTM,DTM,dem_i_elv)) %>% dplyr::select(.,-dem_i_elv)
     }
   }
-  tictoc::toc()
-  aa=1
-  # 2.7 DEM layers - Dynamic ------------------------------------------------------------------
-  message("2.7 DEM layers - Dynamic")
+ 
+  
+  # 2.6 DEM layers - Dynamic ------------------------------------------------------------------
+  message("2.6 DEM layers - Dynamic")
   
   if(NROW(D_DEMs.files)>0){
     # Select Base Lyer df
     DBBL=subset(DEMs.files,!is.na(base_layer))
     for (i in 1:NROW(DBBL)){
-      # 2.7.1 Build Base layer line  for each basin ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      # 2.6.1 Build Base layer line  for each basin ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
       message("2.7.1 Build Base layer line  for each basin")
       DBBL_nam=paste0(DBBL$basin[i],"_","Base")
       DBBL_nam_i=dplyr::filter(DEMs.files,!is.na(base_layer))$name[i]
       DEMs=DEMs %>% mutate("{DBBL_nam}":=DEMs[,DBBL_nam_i])
       
-      # 2.7.2 Build all DEMs Lines - Dynamic ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-      message("2.7.2 Build all DEMs Lines - Dynamic")
+      # 2.6.2 Build all DEMs Lines - Dynamic ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      message("2.6.2 Build all DEMs Lines - Dynamic")
       D_DEMs.fltr=D_DEMs.list[grep(DBBL$basin[i], names(D_DEMs.list))]  
       
       if(NROW(D_DEMs.fltr)>0){
@@ -455,8 +460,8 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
       
     }
     
-    # 2.7.3 Set Dynamic Index_DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    message("2.7.3 Set Dynamic Index_DEMs")
+    # 2.6.3 Set Dynamic Index_DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.6.3 Set Dynamic Index_DEMs")
     
     for(j in 1:NROW(D_DEMs.files)){
       D_DEMnm_j=names(D_DEMs.list[[j]])
@@ -476,8 +481,8 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
       Index_DEMs_Dynamic$Colour_Expreation_list[j]=paste0(Index_DEMs_Dynamic$Colour_Expreation[j],",")
     }
     
-    # 2.7.4 Set Dynamic cols_DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    message("2.7.4 Set Dynamic cols_DEMs")
+    # 2.6.4 Set Dynamic cols_DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.6.4 Set Dynamic cols_DEMs")
     
     cols_DEMs_dynamic=c()
     cols_DEMs=ColourExpreation_DEM()
@@ -487,25 +492,25 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
       names(cols_DEMs_dynamic)[j] <- Index_DEMs_Dynamic[j,1]
     }
     
-    # 2.7.5 Combine Dynamic to Static ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    message("2.7.5 Combine Dynamic to Static")
+    # 2.6.5 Combine Dynamic to Static ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.6.5 Combine Dynamic to Static")
     
     INDEX_DEMs=bind_rows(INDEX_DEMs,Index_DEMs_Dynamic)
     cols_DEMs=c(cols_DEMs,cols_DEMs_dynamic)
   }
   
-  # 2.8 Peeper DEMs data to ggplot -----------------------------------------------------------
-  message("2.8 Preper DEMs data to ggplot")
+  # 2.7 Peeper DEMs data to ggplot -----------------------------------------------------------
+  message("2.7 Preper DEMs data to ggplot")
   DEMs_mlt=reshape2::melt(as.data.frame(dplyr::select(DEMs,-c("id","Longitude","Latitude"))),id=c("dst"))    
   DEMs_cst=DEMs
   DEMs=DEMs_mlt %>% mutate(D.E.Ms = as.character(variable)) %>% dplyr::inner_join(.,DTM,by="dst") %>%
     mutate(Depth=DTM-value)
-  # 2.8.1 Build hierarchy ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  message("2.8.1 Build hierarchy")
+  # 2.7.1 Build hierarchy ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.7.1 Build hierarchy")
   hierarchy=Static_Background[basin %in% Background & !is.na(hierarchy),] %>% dplyr::arrange(.,basin,hierarchy) %>% 
     dplyr::left_join(INDEX_DEMs,by=c("name"="D.E.Ms")) %>% dplyr::distinct(.,hierarchy,basin,.keep_all = T)
-  # 2.8.2 Build Exposed Layer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  message("2.8.2 Build Exposed Layer")
+  # 2.7.2 Build Exposed Layer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.7.2 Build Exposed Layer")
   exposed_df=DEMs_mlt %>% 
     dplyr::rename(.,name=variable,elv=value) %>%
     left_join(.,hierarchy,, by = "name") %>%
@@ -515,15 +520,15 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     dplyr::rename(.,exposed=name)
   DEMs_exp=left_join(DEMs_cst,subset(exposed_df,,c("dst","exposed","f_colour")),by = "dst")
   
-  # 2.8.3 Build active libraries list ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  message("2.8.3 Build active librarys list")
+  # 2.7.3 Build active libraries list ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.7.3 Build active librarys list")
   librarys=dplyr::distinct(hierarchy,basin,.keep_all = F) %>%
     dplyr::filter(.,basin!="national",)
   
-  # 2.9 Transforms layer --------------------------------------------------------------------
-  message("2.9 Transforms layer")
-  # 2.9.2 Extract Falut Layer & DTM sdf ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  message("2.9.1 Extract Falut Layer & DTM sdf")
+  # 2.8 Transforms layer --------------------------------------------------------------------
+  message("2.8 Transforms layer")
+  # 2.8.2 Extract Falut Layer & DTM sdf ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.8.1 Extract Falut Layer & DTM sdf")
   
   if(NROW(transforms_st)>0){
     join_dt=RANN::nn2(subset(seg_df,,c("Longitude_cs", "Latitude_cs")),
@@ -534,8 +539,8 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     transforms_DEM=cbind(transforms_st,join_dt) %>% left_join(.,seg_df) %>% 
       subset(.,,c("DTM","dst"))
   } else {
-    # 2.9.3 Transforms layer - Inactive ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    message("2.9.2 Transforms layer- Inactive")
+    # 2.8.3 Transforms layer - Inactive ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.8.2 Transforms layer- Inactive")
     transforms_DEM=data.frame(Longitude=CS_model_system_unit_dst$Longitude[1],
                               Latitude=CS_model_system_unit_dst$Latitude[1],
                               DTM=CS_model_system_unit_dst$top[1],
@@ -543,25 +548,25 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     T_alpha=0
   }
   if(geological_cs_surf!="blind"){
-    # 2.11 Geology map Cross Section -------------------------------------------------------
-    message("2.11 Geology map Cross Section")
+    # 2.9 Geology map Cross Section -------------------------------------------------------
+    message("2.9 Geology map Cross Section")
     basemap_pth="data/Background_layers/BaseMaps/"
-
+    
     sf::sf_use_s2(FALSE)
-    # 2.11.1 Geology map 1:200,000  intersection ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # 2.9.1 Geology map 1:200,000  intersection ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     CS_geopoints_200=setDT(st_join(st_as_sf(CS_points_sdf),geology_200,left = T,largest=T))[,c("Code","Symbol")]
     geoIDX_200=read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "geoINDEX200")
     CS_geopoints_200IDX=left_join(CS_geopoints_200,geoIDX_200,by="Code")
     colnames(CS_geopoints_200IDX) = paste("200", colnames(CS_geopoints_200IDX), sep = "_")
     
-    # 2.11.2 Geology map 1:50,000  intersection ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # 2.9.2 Geology map 1:50,000  intersection ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     CS_geopoints_50=setDT(st_join(st_as_sf(CS_points_sdf),geology_50,left = T,largest=T))[,c("Code","Symbol")]
     geoIDX_50=read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "geoINDEX50")
     CS_geopoints_50IDX=left_join(CS_geopoints_50,geoIDX_50,by="Code")
     colnames(CS_geopoints_50IDX) = paste("50", colnames(CS_geopoints_50IDX), sep = "_")
     sf::sf_use_s2(T)
     
-    # 2.11.3 Build DTM symbology DF ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # 2.9.3 Build DTM symbology DF ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     CS_geopoints=cbind(CS_geopoints_50IDX,CS_geopoints_200IDX) %>%
       transmute(Code=ifelse(!is.na(`50_Code`),`50_Code`,`200_Code`),
                 Symbol=ifelse(!is.na(`50_Symbol`),as.character(`50_Symbol`),as.character(`200_Symbol`)),
@@ -622,11 +627,11 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
   message("3.2.2 Wells orientation")
   # Calc orientation
   cmudp=CS_model_system_unit_dst %>%  mutate(az=
-                                            nngeo::st_azimuth(
-                                              st_as_sf(., coords = c("Longitude", "Longitude"), crs = 4326) ,
-                                              st_as_sf(., coords = c("Longitude_cs", "Longitude_cs"), crs = 4326))
-                                          ) %>% 
-                                            as.data.table(.,key="az")
+                                               nngeo::st_azimuth(
+                                                 st_as_sf(., coords = c("Longitude", "Longitude"), crs = 4326) ,
+                                                 st_as_sf(., coords = c("Longitude_cs", "Longitude_cs"), crs = 4326))
+  ) %>% 
+    as.data.table(.,key="az")
   azimuth_dt=setDT(azimuth_df,key="az")
   
   cmudp_dt=azimuth_dt[cmudp,roll="nearest"] %>% 
@@ -639,7 +644,7 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
   p_font_t=0.9*ls
   if(nrow(cmudp_fltr)==0){cmudp_fltr=cmudp_dt[1,];p_font=0}
   if(nrow(cmudp_fltr_t)==0){cmudp_fltr_t=cmudp_dt[1,];p_font_t=0}
-
+  
   # 3.3 Set Colors ---------------------------------------------------------------------------
   message("3.3 Set Colours")
   
@@ -738,13 +743,13 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
   
   
   DEM_plot_df=NULL
-  if(NROW(actiev_library_n)>0){
+  if(NROW(actiev_library_n)>0 | exists("DEM_rst",where=additional_layers_lst)==T){
     DTM_plot_df <- na.omit(DTM_CS_df) %>% mutate(Distance=dst,Elevation=DTM)%>%
       mutate(x_next = lead(Distance), y_next = lead(Elevation))
     DEM_plot_df <- dplyr::filter(DEMs,D.E.Ms!="DTM") %>%
       mutate(Distance=dst,`Unit Name`=as.factor(f_name),Elevation=value)
   }
-  if(NROW(actiev_library_n)==0){
+  if(NROW(actiev_library_n)==0 & exists("DEM_rst",where=additional_layers_lst)==T ){
     DTM_plot_df <- na.omit(DTM_CS_df)%>% mutate(Distance=dst,Elevation=DTM)
     DEM_plot_df=read.csv("data/DEMs/DEM_plot_empty.csv") %>%
       mutate(Elevation=max(CS_model_system_ll$top_layer))
@@ -771,7 +776,7 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
   
   # 4.1.4 Build DEMs legend ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   message("4.1.4 Build DEMs legend")
-  if(NROW(actiev_library_n)>0){
+  if(NROW(actiev_library_n)>0| exists("DEM_rst",where=additional_layers_lst)==T){
     DEMs_Legand=DEM_plot_df %>% group_by(f_name,f_colour,Colour_Expreation,D.E.Ms) %>%
       dplyr::summarise(m_dst=mean(dst,na.rm=T),
                        m_elv=mean(value,na.rm=T)) %>%
@@ -866,12 +871,12 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     # Background layers names ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geom_text(data=DEMs_Legand,aes(x=0,y=m_elv,label=legand_DEMS,fontface = "bold",
                                    alpha=0.1,colour = D.E.Ms),
-              size = ifelse(NROW(actiev_library_n)>0,0.05*ls,0),angle=45) +
+              size = ifelse(NROW(actiev_library_n)>0 ,0.05*ls,0),angle=45) +
     scale_colour_manual(values=cols_DEMs,guide = FALSE) +
     new_scale("new_aes") +
     #DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geom_path(data=DEM_plot_df, aes(x=Distance,y=Elevation,colour=`Unit Name`,label=Depth),na.rm = T,
-              size=ifelse(NROW(actiev_library_n)>0,0.7,0),show.legend =T,linetype = "dashed") +
+              size=ifelse(NROW(actiev_library_n)>0 ,0.7,0),show.legend =T,linetype = "dashed") +
     scale_fill_manual(values=cols_DEMs,guide = FALSE) +
     # base - formation and location ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geom_rect(data=CS_model_system_ll,
@@ -920,12 +925,12 @@ if(exists("DEM_rst",where=additional_layers_lst)==T) {
     geom_linerange(data=na.omit(transforms_DEM),aes(x=dst+50,ymin=DTM-abs(total_y_min)*0.20,ymax=DTM-abs(total_y_min*0.10),text=NULL),color="gray5",size=0.3,alpha=0.3)+
     # Projection Line ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geom_label(data =cmudp_fltr,
-                aes(x = dst,y=bot-0.5*space,label =paste0(dir," ",round(1000*dst2cs,0)," m")),
-                colour ="black",size = 0.07*ls,alpha=0.5,fontface="italic")+
+               aes(x = dst,y=bot-0.5*space,label =paste0(dir," ",round(1000*dst2cs,0)," m")),
+               colour ="black",size = 0.07*ls,alpha=0.5,fontface="italic")+
     geom_label(data = cmudp_fltr_t,
                aes(x = dst,y=bot-0.5*space,label =paste0(dir," ",round(1000*dst2cs,0)," m")),
                colour ="red",size = 0.09*ls,alpha=0.5,fontface="italic")+
-
+    
     # name, top and bot ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geom_text(data = CS_model_system_unit_dst,
               aes(x = dst,y=top+0.3*space,label =round(top,0)), colour ="black",size =0.05*ls,alpha=0.9)+ # top
