@@ -435,31 +435,40 @@ cs_model=function(in_param)
     # Select Base Layer df
     DBBL=subset(DEMs.files,!is.na(base_layer))
     for (i in 1:NROW(DBBL)){
-      # 2.6.1 Build Base layer line  for each basin ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-      message("2.6.1 Build Base layer line  for each basin")
-      
-     
       # Edit 07/12/2021 s#######################
-      if(!is.na(D_DEMs.files$hierarchy[i])==T) { # Few WL horizons in same basin
+      if(!is.na(D_DEMs.files$hierarchy[i])==T) {
+        # 2.6.1 Few WL horizons in same basin ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        message("2.6.1 Few WL horizons in same basin")
+        
+        # Build Base layer line for each unit
         DBBL_nam_i=dplyr::filter(DEMs.files,!is.na(base_layer))$name[i]
         DBBL_nam=paste0(DBBL$basin[i],"_",DBBL_nam_i)
         D_DEMs.fltr=D_DEMs.list[grep(DBBL$basin[i], names(D_DEMs.list))][i]
         DEMs=DEMs %>% mutate("{DBBL_nam}":=DEMs[,DBBL_nam_i],
                              base_layer=DEMs[,DBBL_nam_i])
         
+        # Get unit horizon along the CS
         D_DEM_ID=as.character(names(D_DEMs.fltr))
         d_dem_ij = data.frame(d_dem_ij_elv=as.numeric(raster::extract(D_DEMs.fltr[[1]],
                                                                       CS_points_sdf,cellnumbers=T,sp=F,along=T)[,2]))
+        # Intersect With the base layer
         DEMs=cbind(DEMs,d_dem_ij) %>%
           mutate("{D_DEM_ID}":=ifelse(d_dem_ij_elv>base_layer,d_dem_ij_elv,base_layer)) %>%
           dplyr::select(.,-c(d_dem_ij_elv,base_layer))
         
         
-      } else {# One WL horizons in the  basin
+      } else {
+        # 2.6.2 One WL horizons in same basin + WQ (Cl) Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        message("2.6.2 One WL horizons in same basin + WQ (Cl) Horizon")
+        
+        # Build Base layer line
         DBBL_nam_i=dplyr::filter(DEMs.files,!is.na(base_layer))$name[i]
         DBBL_nam=paste0(DBBL$basin[i],"_","Base")
         D_DEMs.fltr=D_DEMs.list[grep(DBBL$basin[i], names(D_DEMs.list))]
-        DEMs=DEMs %>% mutate("{DBBL_nam}":=DEMs[,DBBL_nam_i])
+        DEMs=DEMs %>% mutate("{DBBL_nam}":=DEMs[,DBBL_nam_i],
+                             base_layer=DEMs[,DBBL_nam_i])
+        
+        # Get all type of horizons along the CS
         if(NROW(D_DEMs.fltr)>0){
           for(j in 1:NROW(D_DEMs.fltr)){                          
             print(j)
@@ -468,17 +477,13 @@ cs_model=function(in_param)
             d_dem_ij = data.frame(d_dem_ij_elv=as.numeric(raster::extract(D_DEMs.fltr[[j]],
                                                                           CS_points_sdf,cellnumbers=T,sp=F,along=T)[,2]))
             DEMs=cbind(DEMs,d_dem_ij) %>%
-              mutate("{D_DEM_ID}":=ifelse(d_dem_ij_elv>"{DBBL_nam}",d_dem_ij_elv,"{DBBL_nam}")) %>%
-              dplyr::select(.,-d_dem_ij_elv)
+              mutate("{D_DEM_ID}":=ifelse(d_dem_ij_elv>base_layer,d_dem_ij_elv,base_layer)) %>%
+              dplyr::select(.,-c(d_dem_ij_elv,base_layer))
           } 
         } else{message(paste0("No dynamic data in the Basin: ",DBBL$basin[i]))}
       }
       # Edit 07/12/2021 e#######################
-      
-      # 2.6.2 Build all DEMs Lines - Dynamic ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-      message("2.6.2 Build all DEMs Lines - Dynamic")
-      
-      
+
     }     
     
     
