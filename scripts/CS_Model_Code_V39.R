@@ -56,7 +56,7 @@ cs_model=function(in_param)
     DEM_line_thickness=0.2
     Save_as_PowerPoint=paste0(Background_path,'/CS_Model_V01/Products/hydrology_cs.pptx')
     Use_tamplate =F
-    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_NES.csv'))$V1) ;str_i=1 #NULL #
+    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_COS.csv'))$V1) ;str_i=1 #NULL #
     geological_cs_surf="geomap"# geomap # "geomap_free_colors" # "blind"
     country="Israel" # "Indefinite"
     geology_200=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_200_V4.shp"))
@@ -453,31 +453,31 @@ cs_model=function(in_param)
                                                                       CS_points_sdf,cellnumbers=T,sp=F,along=T)[,2]))
         # Intersect With the base layer
         DEMs=cbind(DEMs,d_dem_ij) %>%
-          mutate("{D_DEM_ID}":=ifelse(d_dem_ij_elv>base_layer,d_dem_ij_elv,base_layer)) %>%
+          mutate("{D_DEM_ID}":=ifelse(d_dem_ij_elv>base_layer,d_dem_ij_elv,NA)) %>%
           dplyr::select(.,-c(d_dem_ij_elv,base_layer))
         
         
       } else {
         # 2.6.2 One WL horizons in same basin + WQ (Cl) Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         message("2.6.2 One WL horizons in same basin + WQ (Cl) Horizon")
-        
-        # Build Base layer line
-        DBBL_nam_i=dplyr::filter(DEMs.files,!is.na(base_layer))$name[i]
-        DBBL_nam=paste0(DBBL$basin[i],"_","Base")
-        D_DEMs.fltr=D_DEMs.list[grep(DBBL$basin[i], names(D_DEMs.list))]
-        DEMs=DEMs %>% mutate("{DBBL_nam}":=DEMs[,DBBL_nam_i],
-                             base_layer=DEMs[,DBBL_nam_i])
-        
-        # Get all type of horizons along the CS
         if(NROW(D_DEMs.fltr)>0){
-          for(j in 1:NROW(D_DEMs.fltr)){                          
+          for(j in 1:NROW(D_DEMs.fltr)){  
+            # Build Base layer line
+            DBBL_nam_i=dplyr::filter(DEMs.files,!is.na(base_layer))$name[i]
+            DBBL_nam=paste0(DBBL$basin[i],"_","Base")
+            D_DEMs.fltr=D_DEMs.list[grep(DBBL$basin[i], names(D_DEMs.list))]
+            DEMs=DEMs %>% mutate("{DBBL_nam}":=DEMs[,DBBL_nam_i],
+                                 base_layer=DEMs[,DBBL_nam_i])
+            
+        # Get all type of horizons along the CS
+                        
             print(j)
             # Intersect raster values by the CS line
             D_DEM_ID=as.character(names(D_DEMs.fltr[j]))
             d_dem_ij = data.frame(d_dem_ij_elv=as.numeric(raster::extract(D_DEMs.fltr[[j]],
                                                                           CS_points_sdf,cellnumbers=T,sp=F,along=T)[,2]))
             DEMs=cbind(DEMs,d_dem_ij) %>%
-              mutate("{D_DEM_ID}":=ifelse(d_dem_ij_elv>base_layer,d_dem_ij_elv,base_layer)) %>%
+              mutate("{D_DEM_ID}":=ifelse(d_dem_ij_elv>base_layer,d_dem_ij_elv,NA)) %>%
               dplyr::select(.,-c(d_dem_ij_elv,base_layer))
           } 
         } else{message(paste0("No dynamic data in the Basin: ",DBBL$basin[i]))}
