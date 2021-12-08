@@ -55,13 +55,13 @@ message("Source Tools Scrips and functions")
 Background_path="G:/Geohydrology" # %%%%%%%%% Change while moved to unplugged  %%%%
 # Prodact_path=paste0(Background_path,"/Geohydrology/Apps/CS_Model_V01/Products")
 source('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
-debugSource('scripts/CS_Model_Code_V38.R', encoding = 'UTF-8') #debugSource
+source('scripts/CS_Model_Code_V39.R', encoding = 'UTF-8') #debugSource
 source('scripts/Horizons_Model_Code_V7.R', encoding = 'UTF-8') #debugSource
 source('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
 options(shiny.maxRequestSize = Inf)
 options(shiny.trace = F)
 options(shiny.fullstacktrace = T)
-options(browser = "C:/Program Files/Google/Chrome/Application/chrome.exe")
+#options(browser = "C:/Program Files/Google/Chrome/Application/chrome.exe")
 options(shiny.reactlog=T) 
 Sys.setlocale("LC_ALL", "Hebrew")
 modeldialog_status="Inactive"
@@ -795,11 +795,11 @@ server <- function(input, output, session) {
   
   # Build Geology Selected Layer ------------------------------------------------------------------
   observeEvent(input$mainmap_draw_new_feature, {
-    
-    feature_type = input$mainmap_draw_stop$shape
-    
+    req(input$mainmap_draw_stop)
+
+    feature_type <- input$mainmap_draw_new_feature$geometry$type
     # Select by Polygon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if(feature_type %in% c("Rectangle","Poly")) {
+    if(feature_type %in% c("Rectangle","Polygon")) {
       message("Select By Polygon")
       #get the coordinates of the polygon
       polygon_coordinates=input$mainmap_draw_new_feature$geometry$coordinates[[1]]
@@ -814,7 +814,7 @@ server <- function(input, output, session) {
       # use intersect to identify selected items
       #selected_gotiles=raster::intersect(sf::as_Spatial(st_zm(geogrid, drop = TRUE, what = "ZM")),drawn_polygon_sp) # st_intersection(geogrid,st_as_sf(drawn_polygon_sp)) #
       # Check the selection 
-      maxtiles=ifelse(input$geomap=="Regional-Low",36,4)
+      maxtiles=ifelse(input$geomap=="Regional-Low",49,10)
       if(nrow(selected_gotiles)<maxtiles){
         # Define selected tiles
         if(input$geomap == "Regional-Low"){
@@ -845,7 +845,7 @@ server <- function(input, output, session) {
                        label = ~Name_Eng,
                        fill = T,
                        weight = 0,
-                       fillOpacity = 0.7,
+                       fillOpacity = 0.4,
                        smoothFactor = 1,
                        group="geology_tiles") %>%
           clearGroup(group="welnames") %>% 
@@ -895,7 +895,7 @@ server <- function(input, output, session) {
         showModal(
           modalDialog(
             title = "There seems to be some issues with your selection: ",
-            "Error: You have selected too many geological tiles, select up to 36 ''Regional-Low'' tiles or up to 4 ''Local-high'' tiles",
+            "Error: You have selected too many geological tiles, select up to 49 ''Regional-Low'' tiles or up to 10 ''Local-high'' tiles",
             easyClose = T,
             size="l",
             footer = NULL
@@ -1079,7 +1079,7 @@ server <- function(input, output, session) {
 
   # Create Virtual Wells ----------------------------------------------------------------
   Virtual_cre=observeEvent(input$mainmap_draw_new_feature,{
-    
+    req(input$mainmap_draw_stop)
     feature_type <- input$mainmap_draw_new_feature$geometry$type
     
     if(feature_type=="Point") {
