@@ -1349,7 +1349,9 @@ server <- function(input, output, session) {
                          common_cols= c("Elevation","Distance","Horizon","method","ID")
                          tab_view=rbind(subset(tab_raw,,common_cols),subset(tab,,common_cols))
                        } 
-                       cs_tagging+geom_point(data=tab_view,
+                       cs_tagging+
+                         new_scale_fill() +
+                         geom_point(data=tab_view,
                                              shape = 21,
                                              colour = "black",
                                              stroke = 0,
@@ -1357,8 +1359,7 @@ server <- function(input, output, session) {
                                                  size=ifelse(method=="manual",as.numeric(input$hpoint_size),
                                                              0.5*as.numeric(input$hpoint_size))
                                              )) +
-                         scale_color_manual(values=cols_classf,guide = FALSE)
-                       
+                         scale_fill_manual(values=cols_classf)
                      })
                      # Render Table
                      output$info = DT::renderDataTable({
