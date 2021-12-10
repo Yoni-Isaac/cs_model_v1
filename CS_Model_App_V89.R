@@ -222,12 +222,13 @@ ui <- fluidPage(
   ),
   
   fluidRow(
-    # Main panel for displaying outputs ------------------------------------------------------------
-    message("Main panel for displaying outputs"),
     div(
       navbarPage(title=div(img(src="app_icon_small_black.jpg"), "Cross Section Model System"),
                  inverse = F, # for diff color view
                  theme = shinytheme("flatly"),
+                 
+                 ## Home panel ==================================================
+                 message("Home panel"),
                  
                  tabPanel("Home", icon = icon("home"),
                           span(actionButton("info", 
@@ -246,14 +247,17 @@ ui <- fluidPage(
                           slickROutput("slickr", width="1400px")#,
                  ),
                  
+                 ## Map panel ===================================================
+                 message("Map panel"),
+                 
                  tabPanel("Map", icon = icon("location-arrow"),
-                          # Sidebar panel for Aoturization -------------------------------------------------------------
+                          ### Sidebar panel for Aoturization --------------------
                           message("Sidebar panel for Aoturization"),
                           fluidRow(
                             hr(),
                             leafletOutput("mainmap",height = "1950px",width = "3400px"),
                             column(width = 5, style = "background-color:#2c3e50; opacity: 0.8;",
-                                   # Control actionButton Column --------------------------------------------------------------
+                                   ###  Control actionButton Column --------------------------------------------------------------
                                    column(width = 3,offset = 1,
                                           passwordInput("PW", creditactionBttn(infoId="Password_info",color="default",c_label="Registered User",icon=img(src = "IHS_logo.jpg",
                                                                                                                                                          height = 36, width = 38)),placeholder=NULL),
@@ -326,16 +330,24 @@ ui <- fluidPage(
                                    )
                             )
                           ),
-                          class = "span1"), 
+                          class = "span1"),
+                 
+                 ## Data panel ==================================================
+                 message("Data panel"),
+                 
                  tabPanel("Wells Meta Data",  icon = icon("database"),
                           fluidRow(
-                            # Buffer Selection ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                            # Buffer Selection ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-
                             numericInput("Buffer",  msgactionBttn(infoId="Buffer_info",color="default",c_label="Search strip width around the CS [km]:"),
                                          min = 0.01, max = 2, value = 0.4,step=0.01)
                           ),
                           DTOutput("CS_model_system")),
-                 tabPanel("Cross Section",  icon = icon("google-wallet"),
-                          # Sidebar panel for Inputs ------------------------------------------------------------
+                 
+                 ## Cross Section panel =========================================
+                 message("Data panel"),
+                 
+                 tabPanel("Cross Section panel",  icon = icon("google-wallet"),
+                          ### Sidebar panel for Inputs -------------------------------------------------------------
                           message("Sidebar panel for Inputs"),
                           fluidPage(
                             column(2,
@@ -349,16 +361,16 @@ ui <- fluidPage(
                                    ),
                                    titlePanel("Model Parameters"),
                                    
-                                   # Build Solids ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Build Solids ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    checkboxInput("Build_Solids", msgactionBttn(infoId="Build_Solids_info",color="default",c_label="Build_Solids:"),value = F),
                                    
-                                   # Cross Section Type ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Cross Section Type ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    radioButtons(inputId="CS_type",label=  msgactionBttn(infoId="CS_type_info",color="default",c_label="Cross Section Type:"),
                                                 selected = NULL,
                                                 choices=c("Groups" = "groups",
                                                           "Formations" = "formations",
                                                           "Materials" = "materials")),
-                                   # Surface geology ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Surface geology ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput(inputId="geological_cs_surf",creditactionBttn(infoId="geological_cs_surf_info",color="default",c_label="Surface Geology",
                                                                                              icon=img(src = "GSI_logo.jpg", height = 18, width = 18)),
                                                multiple=F,
@@ -367,24 +379,24 @@ ui <- fluidPage(
                                                          "Geomap With Free Colors"="geomap_free_colors",
                                                          "Blind"="blind"),
                                    ),
-                                   # Measurement Year ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Measurement Year ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    numericInput(inputId="measurement_year",label =  msgactionBttn(infoId="measurement_year_info",color="default",c_label="Measurement Year:"),
                                                 min = 1970, max = 2020, value = 2018,step=1),
-                                   # Season ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Season ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput(inputId="season",label =  msgactionBttn(infoId="season_info",color="default",c_label="Measurement Season:"),
                                                multiple=F,
                                                selected="",
                                                choices=c("","Summer-Autumn","Winter-Spring"),
                                    ),
-                                   # Resolution ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Resolution ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    numericInput("Resolution",  msgactionBttn(infoId="Resolution_info",color="default",c_label="Horizontal Grid Resolution:"),
                                                 min = 10, max = 1000, value = 50,step=10),
-                                   # vertical Resolution ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # vertical Resolution ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    numericInput("vertical_resolution",  msgactionBttn(infoId="vertical_resolution_info",color="default",c_label="Vertical Grid Resolution:"),
                                                 min = 1, max = 500, value = 50,step=5),
-                                   # Title ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Title ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    textInput("title_CS",  msgactionBttn(infoId="title_CS_info",color="default",c_label="Title:"),value="Test CS"),
-                                   # ID ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # ID ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput("cs_id",  msgactionBttn(infoId="cs_id_info",color="default",c_label="Cross Section ID:"),
                                                multiple=F,
                                                selected="A",
@@ -411,7 +423,7 @@ ui <- fluidPage(
                                                 min = 0, max = 2, value = 1,step=0.1)#,
                                    
                             ),
-                            # Slider Panel for Preview
+                            ### Slider Panel for Preview ------------------------
                             column(9,offset=0,
                                    shinyjs::useShinyjs(),
                                    textOutput("cs_messages"),
@@ -423,35 +435,39 @@ ui <- fluidPage(
                             )
                           ),
                  ),
+                 
+                 ## Geology Model panel =========================================
+                 message("Geology Model panel"),
+
                  tabPanel("Build Geology Model",icon = icon("accusoft"),
                           fluidPage(
-                            
+                            ### Sidebar panel for Inputs -------------------------------------------------------------
                             column(width = 2,
-                                   # Classifier - Point Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Classifier - Point Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    numericInput("hpoint_size",  msgactionBttn(infoId="hpoint_size_info",color="primary",c_label="Point Size:"),
                                                 min = 1, max = 10, value = 1,step=1),
-                                   # Classifier - add Values Between points by interpolation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Classifier - add Values Between points by interpolation ~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput("h_int", msgactionBttn(infoId="h_int_info",color="primary",c_label="Join Points:"),
                                                multiple=F,
                                                choices=c("linear","spline","NaN"),
                                                selected="linear"),
-                                   # Classifier - Set the density of the interpolation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Classifier - Set the density of the interpolation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    numericInput("h_res",  msgactionBttn(infoId="h_res_info",color="primary",c_label="Join Density [m]:"),
                                                 min = 0, max = 1000, value = 10,step=1),
-                                   # Classifier - Select what to class ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Classifier - Select what to class ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput("Select_horizon_by", msgactionBttn(infoId="Select_horizon_by_info",color="primary",c_label="Classifer:"),
                                                multiple=F,
                                                choices=c("Wells","Hydrogeology libraries"),
                                                selected="Wells"),
-                                   # Classifier - Select Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Classifier - Select Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput("Select_horizon", msgactionBttn(infoId="Select_horizon_info",color="primary",c_label="Select horizon:"),
                                                multiple=F,
                                                choices=INDEX_DEMs$f_name),
-                                   # Classifier - Eraser sensitivity [m]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Classifier - Eraser sensitivity [m]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    numericInput("Eraser_sensitivity", msgactionBttn(infoId="Eraser_sensitivity_info",color="primary",c_label="Eraser sensitivity [m]:"),
                                                 min = 0, max = 1000, value = 10,step=5),
                                    fluidRow(
-                                     # Classifier - Create /Add to Horizon DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                     # Classifier - Create /Add to Horizon DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                      actionButton(inputId = "add2hdb",
                                                   icon = icon("database"),
                                                   style="color: #fff; background-color: #337ab7; border-color: #2e6da4",
@@ -459,7 +475,16 @@ ui <- fluidPage(
                                                   label = HTML("<span style='font-size:1.3em;'><br />Create/Add to DB</span>")
                                      )
                                    ),
-                                   # Classifier - Download Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   fluidRow(
+                                     # Classifier - Repair Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                     actionButton(inputId = "repair",
+                                                  icon = icon("tools"),
+                                                  style="color: #fff; background-color: #337ab7; border-color: #2e6da4",
+                                                  width = "204px",
+                                                  label = HTML("<span style='font-size:1.3em;'><br />Repair Horizon</span>")
+                                     )
+                                   ),
+                                   # Classifier - Download Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    fluidRow(
                                      downloadButton("download_horizon",
                                                     icon = icon("accusoft"),
@@ -470,7 +495,7 @@ ui <- fluidPage(
                                    )
                                    
                             ),
-                            # Slider Panel for Edit Horizon
+                            ### Slider Panel for Edit Horizon --------------------------------------------------------
                             column(9,
                                    plotOutput("cs_tagging",height = "680px",width = "2140px",click = "plot_click"),
                                    DT::dataTableOutput("info")
@@ -1371,7 +1396,7 @@ server <- function(input, output, session) {
                      })  
                    })
                    # Add to Data Base --------------------------------------------------------------
-                   # Edit 12082021 ###########
+                   # Edit 12082021 s###########
                    observeEvent(input$add2hdb,{
                      req(tab_raw)
                      fill_horizons_coord=coordinate_horizons(
@@ -1397,7 +1422,54 @@ server <- function(input, output, session) {
                      tab<-NULL
                      print(horizons_db[method=="manual",])
                    })
-                   # Edit 12082021 ###########
+                   # Edit 12082021 e###########
+                   # Add to Data Base -------------------------------------------------------------
+                   # Edit 10122021 s###########
+                   observeEvent(input$repair,{
+                     req(input$h_int!="NaN" & nrow(tab_raw)>1)
+                     req(nrow(charts$cs_data$DEM_plot_df)>0)
+                     
+                     ### Get FIX Ranges ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                     tab_coord=coordinate_horizons(
+                       fill_horizons=tab,
+                       DEM_plot_df=charts$cs_data$DEM_plot_df,
+                       max_range=10
+                     )
+                     acth=dplyr::distinct(tab_coord,Horizon)
+                     
+                     rng4repair=tab_coord %>% group_by(Horizon) %>% 
+                       summarise(st=min(Distance,na.rm = T),
+                                 ed=max(Distance,na.rm = T))
+                     
+                     ### Extract Proper Ranges ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                     h2repair=subset(charts$cs_data$DEM_plot_df,
+                                     `Unit Name` %in% acth$Horizon,
+                                     c(Elevation,Distance,`Unit Name`,Longitude,Latitude)) %>% 
+                       dplyr::rename(Horizon=`Unit Name`) 
+                     
+                     hproper=left_join(h2repair,rng4repair) %>% 
+                       mutate(erase=case_when(
+                         Distance %between% list(st, ed) ~ T,
+                         TRUE  ~ F
+                            )
+                       ) %>% 
+                       dplyr::filter(erase==F) %>% 
+                       mutate(ID=tab_coord$ID[1],
+                              method="Source")
+                     
+                     ### Join FIX to Proper ranges ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                     common_cols=c("Distance","Longitude","Latitude","Elevation","Horizon","method","ID")
+                     fix_range=bind_rows(subset(hproper,,c(common_cols)),
+                                         subset(tab_coord,,c(common_cols))) %>% 
+                       dplyr::arrange(Horizon,Distance)
+
+                   aa=1  
+                   })
+                   
+                   
+                   
+                   
+                   
                    # Download Horizon --------------------------------------------------------------
                    output$download_horizon <-downloadHandler(
                      req(!is.null(tab_raw)),
