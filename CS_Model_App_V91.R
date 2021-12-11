@@ -56,7 +56,7 @@ Background_path="G:/Geohydrology" # %%%%%%%%% Change while moved to unplugged  %
 # Prodact_path=paste0(Background_path,"/Geohydrology/Apps/CS_Model_V01/Products")
 source('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
 source('scripts/CS_Model_Code_V39.R', encoding = 'UTF-8') #debugSource
-source('scripts/Horizons_Model_Code_V7.R', encoding = 'UTF-8') #debugSource
+source('scripts/Horizons_Model_Code_V8.R', encoding = 'UTF-8') #debugSource
 source('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
 options(shiny.maxRequestSize = Inf)
 options(shiny.trace = F)
@@ -139,6 +139,7 @@ cs_ids=read.csv(paste0(design_pth,"/cs_ids_V1.csv"))
 tab_raw=NULL
 tab_tbl=NULL
 horizons_db=NULL
+segment_id=0
 
 # Additional Layers
 additional_layers_df=read.csv(paste0(design_pth,"/additional_layers_ids_V1.csv"))
@@ -500,9 +501,19 @@ ui <- fluidPage(
                             ### Slider Panel for Edit Horizon --------------------------------------------------------
                             column(9,
                                    plotOutput("cs_tagging",height = "680px",width = "2140px",click = "plot_click"),
-                                   DT::dataTableOutput("info")
+                                   DT::dataTableOutput("info"),
+                                   # Segment creator by right click
+                                   tagList(
+                                     tags$script(
+                                       "$(function(){
+                                          $(this).bind('contextmenu', function (e) {
+                                            e.preventDefault()
+                                            Shiny.setInputValue('plop', Math.random());
+                                          });
+                                        });"
+                                     )
+                                   )
                             )
-                            
                           )
                  )
       )
@@ -1313,7 +1324,7 @@ server <- function(input, output, session) {
                    clickposition_history <- reactiveVal(data.frame(Distance = numeric(),Longitude=numeric(),
                                                                    Latitude=numeric(),Range=numeric(),
                                                                    Elevation = numeric(),Horizon=character(),
-                                                                   method=character(),ID=character()))
+                                                                   Segment=numeric(),method=character(),ID=character()))
                    # Add selected box Column ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                    if(nrow(clickposition_history())==0){
                      output$info = DT::renderDataTable({
@@ -1324,6 +1335,7 @@ server <- function(input, output, session) {
                        slc_tbl
                      }) 
                    }
+
                    # Add new point ========================================================================
                    observeEvent(input$plot_click, {
                      print(tab_raw)
@@ -1334,6 +1346,7 @@ server <- function(input, output, session) {
                        DEM_plot_df=charts$cs_data$DEM_plot_df
                      )
                      new_point_ll$ID=paste0(as.character(input$cs_id),as.character(input$cs_id),"'")
+                     new_point_ll$Segment=segment_id
                      # Check point class ------------------------------------------------------------------
                      if(nrow(tab_raw)>0){
                        tab_check=tab_raw %>%
@@ -1358,7 +1371,7 @@ server <- function(input, output, session) {
                        tab_lst=list()
                        for (i in 1:nrow(horizons2fill)){
                          n_horizon=horizons2fill$n[i]
-                         act_horizon=filter(tab_raw,Horizon==horizons2fill$Horizon[i])
+                         act_horizon=filter(tab_raw,Horizon==horizons2fill$Horizon[i]) 
                          if (n_horizon>1) {
                            tab_lst[[i]]=fill_horizons(
                              tab_raw=act_horizon,
@@ -1366,11 +1379,11 @@ server <- function(input, output, session) {
                              int_mathos=input$h_int
                            )
                          }else{
-                           tab_lst[[i]]=subset(act_horizon,,c("Elevation","Distance","Horizon","method","ID"))
+                           tab_lst[[i]]=subset(act_horizon,,c("Elevation","Distance","Horizon","Segment","method","ID"))
                          }
                        }
                        tab<<-Reduce(rbind,tab_lst)  
-                     } else{tab<<-subset(tab_raw,,c("Elevation","Distance","Horizon","method","ID"))}
+                     } else{tab<<-subset(tab_raw,,c("Elevation","Distance","Horizon","Segment","method","ID"))}
                      
                      
                      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1385,7 +1398,7 @@ server <- function(input, output, session) {
                        req(cs_tagging)
                        tab_view=tab_raw
                        if(input$h_int!="NaN" & nrow(tab_raw)>1){
-                         common_cols= c("Elevation","Distance","Horizon","method","ID")
+                         common_cols= c("Elevation","Distance","Horizon","Segment","method","ID")
                          tab_view=rbind(subset(tab_raw,,common_cols),subset(tab,,common_cols))
                        } 
                        cs_tagging+
@@ -1409,8 +1422,14 @@ server <- function(input, output, session) {
                        slc_tbl
                      })  
                    })
-                   # Add to Data Base --------------------------------------------------------------
-                   # Edit 12082021 s###########
+                   # Edit 11122021 S################
+                   # Segments cutter ==================================================================
+                   SegmentsListen <- reactive({list(input$plop,input$Select_horizon)})
+                   observeEvent(input$plop,{segment_id<<-segment_id+1}) # Right click
+                   observeEvent(input$Select_horizon,{segment_id<<-segment_id+1}) # New horizon
+                    # Edit 11122021 E################
+                   
+                   ### Add to Data Base --------------------------------------------------------------
                    observeEvent(input$add2hdb,{
                      req(tab_raw)
                      fill_horizons_coord=coordinate_horizons(
@@ -1440,21 +1459,19 @@ server <- function(input, output, session) {
                      tab<-NULL
                      print(horizons_db[method=="manual",])
                    })
-                   # Edit 12082021 e###########
-                   # Edit 10122021 s###########
                    observeEvent(input$repair,{
+                     ### FIX Ranges ------------------------------------------------------------------
                      req(input$h_int!="NaN" & nrow(tab_raw)>1)
                      req(nrow(charts$cs_data$DEM_plot_df)>0)
-                     
-                     ### Get FIX Ranges ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
                      tab_coord=coordinate_horizons(
                        fill_horizons=tab,
                        DEM_plot_df=charts$cs_data$DEM_plot_df,
                        max_range=10
                      )
-                     acth=dplyr::distinct(tab_coord,Horizon)
+                     acth=dplyr::distinct(tab_coord,Horizon,Segment)
                      
-                     rng4repair=tab_coord %>% group_by(Horizon) %>% 
+                     rng4repair=tab_coord %>% group_by(Horizon,Segment) %>% 
                        summarise(st=min(Distance,na.rm = T),
                                  ed=max(Distance,na.rm = T))
                      
@@ -1462,17 +1479,25 @@ server <- function(input, output, session) {
                      h2repair=subset(charts$cs_data$DEM_plot_df,
                                      `Unit Name` %in% acth$Horizon,
                                      c(Elevation,Distance,`Unit Name`,Longitude,Latitude)) %>% 
-                       dplyr::rename(Horizon=`Unit Name`) 
+                       dplyr::rename(Horizon=`Unit Name`)
                      
                      hproper=left_join(h2repair,rng4repair) %>% 
                        mutate(erase=case_when(
-                         Distance %between% list(st, ed) ~ T,
+                         Distance %between% list(st, ed) ~ 1,
+                         TRUE  ~ 0
+                       )
+                       ) %>% group_by(Distance,Horizon) %>% 
+                       mutate(erase=case_when(
+                         max(erase,na.rm = T)>0 ~ T,
                          TRUE  ~ F
                        )
-                       ) %>% 
+                       )  %>% 
                        dplyr::filter(erase==F) %>% 
+                       dplyr::select(-c(Segment,st,ed)) %>% 
+                       dplyr::distinct_(.dots = names(.))  %>% 
                        mutate(ID=tab_coord$ID[1],
-                              method="Source")
+                              method="Source",
+                              Segment=NA)
                      
                      ### Join FIX to Proper ranges ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      common_cols=c("Distance","Longitude","Latitude","Elevation","Horizon","method","ID")
@@ -1480,14 +1505,11 @@ server <- function(input, output, session) {
                                          subset(tab_coord,,c(common_cols))) %>% 
                        dplyr::arrange(Horizon,Distance)
                      
-
                      # Open Download option ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      horizons_db<<-fix_range
                      out_h_nme<<-"Fixed_CS-"
                      shinyjs::show("download_horizon")
                    })
-                   
-                   
                  }  # End Cross Section
                }
                }) # End of Cross Section Rendering
