@@ -204,16 +204,35 @@ nodes_linker=function(current_line,lines_db,horizons_db){
     juc_pnt_i=st_intersection(current_line,lines_db_i)#  %>% st_cast("POINT") 
     # Get Horizon data
     horizons_db_st_i=dplyr::filter(horizons_db_st,cs_id == lines_db_i$cs_id)
+    
+    aa=horizons_db_st_i %>% split(.$Horizon) %>% 
+      map(~ mutate(., closest_pnt =nngeo::st_nn(juc_pnt_i,.)) %>%  select(closest_pnt) %>%
+      unlist(T,F)) 
+    bb=Reduce(cbind,aa)
+    
+    closest_pnt=horizons_db_st_i %>% 
+      group_by(Horizon) %>% 
+      group_nest() %>% 
+      mutate(closest_pnt=unlist({ map(.$data,function(df) nngeo::st_nn(juc_pnt_i,df$geometry)) }))
+
+        
     closest_pnt=unlist(nngeo::st_nn(juc_pnt_i, horizons_db_st_i))
     distance_on_cs=horizons_db_st_i$Distance[closest_pnt]
     juc_i_horizons=horizons_db_st_i %>%  dplyr::filter(Distance==distance_on_cs) %>% 
       st_drop_geometry(.) %>% dplyr::select(-cs_id) %>% na.omit(.)
-  }
-  juc_df=bind_rows(juc_df,juc_i_horizons)
+    juc_df=bind_rows(juc_df,juc_i_horizons)
+    }
   return(juc_df)
 }
 
 
+# 6. Clean temporals ################################################################
+cln_tmprl=function(){
+fill_horizons_coord<<-NULL
+horizons<<-NULL
+tab_raw<<-NULL
+tab<<-NULL  
+}
 
 
 
