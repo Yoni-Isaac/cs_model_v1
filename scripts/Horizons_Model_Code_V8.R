@@ -186,34 +186,32 @@ combine_m_sources=function(wells,manual_pnt){
 # 5. Link Nodes ################################################################
 # Unit Test
 if(Type_of_runing=="u_t"){
-  current_line=st_read("G:/Layers/Geohydrology/Geohydrology/Apps/External_Data/current_line.shp")
-  horizons_db=read.csv("G:/Layers/Geohydrology/Geohydrology/Apps/External_Data/horizons_db.csv")
-  nodes_links_df=nodes_linker(current_line,horizons_db)
+  current_line=st_read(paste0(Background_path,'/Apps/External_Data/drawn_polyline.csv')) %>% st_set_crs(4326)
+  lines_db=st_read(paste0(Background_path,'/Apps/External_Data/lines_db.shp')) %>% st_set_crs(4326)
+  horizons_db=read.csv("G:/Geohydrology/Apps/External_Data/horizons_db.csv")
+  nodes_links_df=nodes_linker(current_line,lines_db,horizons_db)
 }
 # Func
-nodes_linker=function(current_line,horizons_db){
+nodes_linker=function(current_line,lines_db,horizons_db){
+  horizons_db_st=st_as_sf(horizons_db, coords = c("Longitude", "Latitude"), crs = 4326,remove=F) %>% 
+    mutate(cs_id=str_sub(ID,1,1))
   # Intersection
-  cs_idx=dplyr::distinct(horizons_db,ID)
   juc_df=horizons_db[0,]
-  for (i in 1:nrow(cs_idx)){
+  for (i in 1:nrow(lines_db)){
     print(i)
     # Get Intersection to CS
-    horizons_pnt = st_as_sf(horizons_db, coords = c("Longitude", "Latitude"), crs =4326,remove=F) %>% 
-      dplyr::filter(.,ID==cs_idx$ID[i])
-    horizons_line_i=horizons_pnt %>% group_by(ID) %>% st_union() %>% st_cast("LINESTRING")
-    juc_pnt=st_intersection(current_line,horizons_line_i)  %>% st_cast("POINT") 
+    lines_db_i=lines_db[i,]
+    juc_pnt_i=st_intersection(current_line,lines_db_i)#  %>% st_cast("POINT") 
     # Get Horizon data
-    horizons_idx=dplyr::distinct(horizons_db,Horizon)
-    for (ii in 1:nrow(horizons_idx)){
-      horizons_db_ii=st_difference(dplyr::filter(horizons_pnt,Horizon==horizons_idx$Horizon[ii]))
-      z=unlist(nngeo::st_nn(juc_pnt, horizons_db_ii))
-      juc_i_horizons=horizons_db_ii[z,] %>% st_drop_geometry(.)
-      juc_df=bind_rows(juc_df,juc_i_horizons)
-    }
+    horizons_db_st_i=dplyr::filter(horizons_db_st,cs_id == lines_db_i$cs_id)
+    closest_pnt=unlist(nngeo::st_nn(juc_pnt_i, horizons_db_st_i))
+    distance_on_cs=horizons_db_st_i$Distance[closest_pnt]
+    juc_i_horizons=horizons_db_st_i %>%  dplyr::filter(Distance==distance_on_cs) %>% 
+      st_drop_geometry(.) %>% dplyr::select(-cs_id) %>% na.omit(.)
   }
+  juc_df=bind_rows(juc_df,juc_i_horizons)
   return(juc_df)
 }
-
 
 
 

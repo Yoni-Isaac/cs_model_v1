@@ -28,6 +28,7 @@ library(DT)
 library(stringr)
 library(openxlsx)
 library(readr)
+library(ggrepel)
 library(ggplot2)
 library(ggnewscale)
 library(plotly)
@@ -140,6 +141,7 @@ tab_raw=NULL
 tab_tbl=NULL
 horizons_db=NULL
 segment_id=0
+lines_db<<-NULL
 
 # Additional Layers
 additional_layers_df=read.csv(paste0(design_pth,"/additional_layers_ids_V1.csv"))
@@ -382,7 +384,7 @@ ui <- fluidPage(
                                    ),
                                    # Measurement Year ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    numericInput(inputId="measurement_year",label =  msgactionBttn(infoId="measurement_year_info",color="default",c_label="Measurement Year:"),
-                                                min = 1970, max = 2020, value = 2018,step=1),
+                                                min = 1970,value=NULL, max = 2020,step=1), #  value = 2018
                                    # Season ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput(inputId="season",label =  msgactionBttn(infoId="season_info",color="default",c_label="Measurement Season:"),
                                                multiple=F,
@@ -500,7 +502,7 @@ ui <- fluidPage(
                             ),
                             ### Slider Panel for Edit Horizon --------------------------------------------------------
                             column(9,
-                                   plotOutput("cs_tagging",height = "680px",width = "2140px",click = "plot_click"),
+                                   plotOutput("cs_tagging",height = "1200px",width = "2140px",click = "plot_click"),
                                    DT::dataTableOutput("info"),
                                    # Segment creator by right click
                                    tagList(
@@ -1272,7 +1274,7 @@ server <- function(input, output, session) {
                      })  
                    # Geology Horizons System ##############################################################
                    
-                   # Set Download Butten --------------------------------------------------------------
+                   # Set Download Butten ------------------------------------------------------------------
                    output$download_horizon <-downloadHandler(
                      message("Download Horizons"),
                      filename = function() { 
@@ -1282,12 +1284,13 @@ server <- function(input, output, session) {
                        write.csv(horizons_db,file, row.names = F)
                      }
                    )
-                   
+                   # Upload Cross Esction Download Butten -------------------------------------------------
                    output$cs_tagging<-renderPlot({
                      req(charts$cs_raw)
+                     current_line<<-st_as_sf(charts$cs_data$CS_line) %>% st_set_crs(4326)
                      if(!is.null(horizons_db)){
                        # Get Junction Points --------------------------------------------------------------
-                       nodes_links_df=nodes_linker(current_line=st_as_sf(charts$cs_data$CS_line),horizons_db)
+                       nodes_links_df=nodes_linker(current_line,lines_db,horizons_db)
                        # Render CS ------------------------------------------------------------------------
                        cols_classf<<-ColourExpreation()
                        cs_tagging<<-charts$cs_raw+geom_text(data=nodes_links_df,
@@ -1354,7 +1357,7 @@ server <- function(input, output, session) {
                                 pnt2erase=ifelse(int_dist<input$Eraser_sensitivity & Horizon==input$Select_horizon,1,0)) %>% 
                          dplyr::filter(.,pnt2erase==0)
                        
-                       if (nrow(tab_check)<nrow(tab_raw)) {
+                       if (nrow(tab_check)<nrow(tab_raw) & nrow(tab_raw)>0) {
                          message("Delete Point") # Delete Point ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                          tab_raw<<-dplyr::distinct(dplyr::select(tab_check,-int_dist,-pnt2erase),Distance,Elevation,ID,.keep_all = T) %>% arrange(desc(Distance))
                        } else {
@@ -1390,7 +1393,7 @@ server <- function(input, output, session) {
                      write.csv(tab_raw, paste0(Background_path,'/Apps/External_Data/tab_raw.csv'))  #  Local Test file
                      write.csv(charts$cs_data$DEM_plot_df, paste0(Background_path,'/Apps/External_Data/cs_pnts_dt.csv'))  #  Local Test file
                      write.csv(charts$cs_data$wells_plot_df, paste0(Background_path,'/Apps/External_Data/wells_plot_df.csv'))  #  Local Test file
-                     # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                     #%%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                      
                      # Render Cross Section & and table ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      cols_DEMs=ColourExpreation_DEM()
@@ -1422,13 +1425,11 @@ server <- function(input, output, session) {
                        slc_tbl
                      })  
                    })
-                   # Edit 11122021 S################
                    # Segments cutter ==================================================================
                    SegmentsListen <- reactive({list(input$plop,input$Select_horizon)})
                    observeEvent(input$plop,{segment_id<<-segment_id+1}) # Right click
                    observeEvent(input$Select_horizon,{segment_id<<-segment_id+1}) # New horizon
-                    # Edit 11122021 E################
-                   
+
                    ### Add to Data Base --------------------------------------------------------------
                    observeEvent(input$add2hdb,{
                      req(tab_raw)
@@ -1452,12 +1453,26 @@ server <- function(input, output, session) {
                      out_h_nme<<-"Horizons_CS-"
                      shinyjs::show("download_horizon")
                      
+                     # Current line to DB
+                     current_line$cs_id=input$cs_id
+                     if (input$cs_id!="A"){
+                      lines_db<<-bind_rows(current_line,lines_db)
+                     } else {
+                       lines_db<<-current_line
+                     }
+                     
                      # Clean temporal
                      fill_horizons_coord=NULL
                      horizons=NULL
                      tab_raw<-NULL
                      tab<-NULL
                      print(horizons_db[method=="manual",])
+                     
+                     # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                     write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
+                     st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'),delete_dsn=TRUE)
+                     # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                   
                    })
                    observeEvent(input$repair,{
                      ### FIX Ranges ------------------------------------------------------------------
@@ -1505,10 +1520,24 @@ server <- function(input, output, session) {
                                          subset(tab_coord,,c(common_cols))) %>% 
                        dplyr::arrange(Horizon,Distance)
                      
+                     # Current line to DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                     current_line$cs_id=input$cs_id
+                     if (input$cs_id!="A"){
+                       lines_db<<-bind_rows(current_line,lines_db)
+                     } else {
+                       lines_db<<-current_line
+                     }
+
                      # Open Download option ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      horizons_db<<-fix_range
                      out_h_nme<<-"Fixed_CS-"
                      shinyjs::show("download_horizon")
+                     
+                     # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                     write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
+                     st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'),delete_dsn=TRUE)
+                     # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
                    })
                  }  # End Cross Section
                }

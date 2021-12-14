@@ -15,10 +15,10 @@ if(Type_of_runing=="u_t"){
   tictoc::tic()
   charts=cs_model(in_param="t")
   tictoc::toc()
-  print(charts$cs_preview)
-  print(charts$cs_html)
+  # print(charts$cs_preview)
+  # print(charts$cs_html)
   ggsave2(paste0("RB/Products","/Preview_CS",".pdf"),charts$cs_preview,width=14,height=7)
-  print(charts$cs_ppt, target = paste0("RB/Products","/Editable_CS",".pptx"))
+  print(charts$cs_ppt, target = paste0(Background_path,"/Apps/RB/Editable_CS",".pptx"))
   htmlwidgets::saveWidget(charts$cs_html,selfcontained = FALSE, file=paste0("RB/Products","/Interactive_CS",".html"))
 }
 # Function
@@ -56,7 +56,7 @@ cs_model=function(in_param)
     DEM_line_thickness=0.2
     Save_as_PowerPoint=paste0(Background_path,'/CS_Model_V01/Products/hydrology_cs.pptx')
     Use_tamplate =F
-    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_COS.csv'))$V1) ;str_i=1 #NULL #
+    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_NES.csv'))$V1) ;str_i=1 #NULL #
     geological_cs_surf="geomap"# geomap # "geomap_free_colors" # "blind"
     country="Israel" # "Indefinite"
     geology_200=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_200_V4.shp"))
@@ -453,7 +453,7 @@ cs_model=function(in_param)
                                                                       CS_points_sdf,cellnumbers=T,sp=F,along=T)[,2]))
         # Intersect With the base layer
         DEMs=cbind(DEMs,d_dem_ij) %>%
-          mutate("{D_DEM_ID}":=ifelse(d_dem_ij_elv>base_layer,d_dem_ij_elv,NA)) %>%
+          mutate("{D_DEM_ID}":=ifelse(d_dem_ij_elv>base_layer,d_dem_ij_elv,d_dem_ij_elv)) %>% # NA
           dplyr::select(.,-c(d_dem_ij_elv,base_layer))
         
         
@@ -952,18 +952,20 @@ cs_model=function(in_param)
     # Projection Line ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geom_label(data =cmudp_fltr,
                aes(x = dst,y=bot-0.5*space,label =paste0(dir," ",round(1000*dst2cs,0)," m")),
-               colour ="black",size = 0.07*ls,alpha=0.5,fontface="italic")+
+               colour ="black",size = 0.04*ls,alpha=0.5,fontface="italic")+
     geom_label(data = cmudp_fltr_t,
                aes(x = dst,y=bot-0.5*space,label =paste0(dir," ",round(1000*dst2cs,0)," m")),
-               colour ="red",size = 0.09*ls,alpha=0.5,fontface="italic")+
+               colour ="red",size = 0.04*ls,alpha=0.5,fontface="italic")+
     
     # name, top and bot ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geom_text(data = CS_model_system_unit_dst,
               aes(x = dst,y=top+0.3*space,label =round(top,0)), colour ="black",size =0.05*ls,alpha=0.9)+ # top
-    geom_text(data = CS_model_system_unit_dst,
-              aes(x = dst,y=bot-0.2*space,label =paste0("TD=",round(bot,0))), colour ="black",size = 0.05*ls,alpha=0.5)+ # bot
-    geom_text(data = CS_model_system_unit_dst,
-              aes(x = dst,y=top+0.8*space,label =name), colour ="black",angle = 45,size =0.1*ls,alpha=0.9)+ # name
+    ggrepel::geom_text_repel(data = CS_model_system_unit_dst,
+              aes(x = dst,y=bot-0.1*space,label =paste0("TD=",round(bot,0))),
+              colour = "black", fill = alpha(c("white"),0.7),size = 0.05*ls,alpha=1,
+              max.overlaps = 100) + # bot
+    ggrepel::geom_text_repel(data = CS_model_system_unit_dst,
+              aes(x = dst,y=top+0.8*space,label =name), colour ="black",angle = 45,size =0.1*ls,alpha=0.9,max.overlaps = 20) + # name
     # Reset Final Dims ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     scale_y_continuous(breaks = seq(total_y_min,total_y_max, by=vertical_resolution),
                        limits = c(total_y_min,max(max_DEM+1.5*space,total_y_max)))+
