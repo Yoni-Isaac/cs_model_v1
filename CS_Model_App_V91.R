@@ -1156,6 +1156,7 @@ server <- function(input, output, session) {
   
   # Run Cross Section Model ###############################################################################
   observeEvent(input$Get,
+               
                {if(!is.null(input$file1) & is.null(input$file2)){
                  {
                    # Get Well DT & CS line ----------------------------------------------------------------
@@ -1243,6 +1244,9 @@ server <- function(input, output, session) {
                                   withCallingHandlers({
                                     shinyjs::html("cs_messages", "")
                                     charts<<-cs_model(in_param=CS_Prameters)
+                                    # Directly Sub products
+                                    cln_tmprl()
+                                    current_line<<-st_as_sf(charts$cs_data$CS_line) %>% st_set_crs(4326)
                                   },
                                   message = function(m) {
                                     shinyjs::html(id = "cs_messages", html = m$message, add = F)
@@ -1287,7 +1291,6 @@ server <- function(input, output, session) {
                    # Upload Cross Esction Download Butten -------------------------------------------------
                    output$cs_tagging<-renderPlot({
                      req(charts$cs_raw)
-                     current_line<<-st_as_sf(charts$cs_data$CS_line) %>% st_set_crs(4326)
                      if(!is.null(horizons_db)){
                        # Get Junction Points --------------------------------------------------------------
                        nodes_links_df=nodes_linker(current_line,lines_db,horizons_db)
@@ -1462,12 +1465,8 @@ server <- function(input, output, session) {
                      }
                      
                      # Clean temporal
-                     fill_horizons_coord=NULL
-                     horizons=NULL
-                     tab_raw<-NULL
-                     tab<-NULL
-                     print(horizons_db[method=="manual",])
-                     
+                     cln_tmprl()
+
                      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                      write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
                      st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'),delete_dsn=TRUE)
@@ -1478,6 +1477,7 @@ server <- function(input, output, session) {
                      ### FIX Ranges ------------------------------------------------------------------
                      req(input$h_int!="NaN" & nrow(tab_raw)>1)
                      req(nrow(charts$cs_data$DEM_plot_df)>0)
+                     req(nrow(tab)>0)
 
                      tab_coord=coordinate_horizons(
                        fill_horizons=tab,
@@ -1516,7 +1516,7 @@ server <- function(input, output, session) {
                      
                      ### Join FIX to Proper ranges ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      common_cols=c("Distance","Longitude","Latitude","Elevation","Horizon","method","ID")
-                     fix_range=bind_rows(subset(hproper,,c(common_cols)),
+                     horizons=bind_rows(subset(hproper,,c(common_cols)),
                                          subset(tab_coord,,c(common_cols))) %>% 
                        dplyr::arrange(Horizon,Distance)
                      
@@ -1527,9 +1527,15 @@ server <- function(input, output, session) {
                      } else {
                        lines_db<<-current_line
                      }
-
+                     
+                     # Create ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                     if(is.null(horizons_db)){
+                       horizons_db<<-dplyr::distinct(horizons,Horizon,Distance,Elevation,ID,.keep_all = T)
+                     } else {
+                       horizons_db<<-rbind(horizons_db,horizons)
+                     }
+                     
                      # Open Download option ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                     horizons_db<<-fix_range
                      out_h_nme<<-"Fixed_CS-"
                      shinyjs::show("download_horizon")
                      
@@ -1537,7 +1543,9 @@ server <- function(input, output, session) {
                      write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
                      st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'),delete_dsn=TRUE)
                      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+                     
+                     # Clean temporal ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                     cln_tmprl()
                    })
                  }  # End Cross Section
                }
