@@ -17,7 +17,7 @@ if(Type_of_runing=="u_t"){
   tictoc::toc()
   # print(charts$cs_preview)
   # print(charts$cs_html)
-  ggsave2(paste0("RB/Products","/Preview_CS",".pdf"),charts$cs_preview,width=14,height=7)
+  ggsave2(paste0(Background_path,"/RB/Preview_CS",".pdf"),charts$cs_preview,width=14,height=7)
   print(charts$cs_ppt, target = paste0(Background_path,"/Apps/RB/Editable_CS",".pptx"))
   htmlwidgets::saveWidget(charts$cs_html,selfcontained = FALSE, file=paste0("RB/Products","/Interactive_CS",".html"))
 }
@@ -458,19 +458,20 @@ cs_model=function(in_param)
         
         
       } else {
-        # 2.6.2 One WL horizons in same basin + WQ (Cl) Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        message("2.6.2 One WL horizons in same basin + WQ (Cl) Horizon")
+        D_DEMs.fltr=D_DEMs.list[grep(DBBL$basin[i], names(D_DEMs.list))]
         if(NROW(D_DEMs.fltr)>0){
+          # 2.6.2 One WL horizons in same basin + WQ (Cl) Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          message("2.6.2 One WL horizons in same basin + WQ (Cl) Horizon")
           for(j in 1:NROW(D_DEMs.fltr)){  
             # Build Base layer line
             DBBL_nam_i=dplyr::filter(DEMs.files,!is.na(base_layer))$name[i]
             DBBL_nam=paste0(DBBL$basin[i],"_","Base")
-            D_DEMs.fltr=D_DEMs.list[grep(DBBL$basin[i], names(D_DEMs.list))]
+            
             DEMs=DEMs %>% mutate("{DBBL_nam}":=DEMs[,DBBL_nam_i],
                                  base_layer=DEMs[,DBBL_nam_i])
             
-        # Get all type of horizons along the CS
-                        
+            # Get all type of horizons along the CS
+            
             print(j)
             # Intersect raster values by the CS line
             D_DEM_ID=as.character(names(D_DEMs.fltr[j]))
@@ -483,7 +484,7 @@ cs_model=function(in_param)
         } else{message(paste0("No dynamic data in the Basin: ",DBBL$basin[i]))}
       }
       # Edit 07/12/2021 e#######################
-
+      
     }     
     
     
@@ -524,7 +525,7 @@ cs_model=function(in_param)
     
     INDEX_DEMs=bind_rows(INDEX_DEMs,Index_DEMs_Dynamic)
     cols_DEMs=c(cols_DEMs,cols_DEMs_dynamic)
-  }
+  
   
   # 2.7 Prepare DEMs data to ggplot -----------------------------------------------------------
   message("2.7 Prepare DEMs data to ggplot")
@@ -551,7 +552,7 @@ cs_model=function(in_param)
   message("2.7.3 Build active librarys list")
   librarys=dplyr::distinct(hierarchy,basin,.keep_all = F) %>%
     dplyr::filter(.,basin!="national",)
-  
+  }
   # 2.8 Transforms layer --------------------------------------------------------------------
   message("2.8 Transforms layer")
   # 2.8.2 Extract Falut Layer & DTM sdf ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -776,9 +777,10 @@ cs_model=function(in_param)
     DEM_plot_df <- dplyr::filter(DEMs,D.E.Ms!="DTM") %>%
       mutate(Distance=dst,`Unit Name`=as.factor(f_name),Elevation=value)
   } else{
-    DTM_plot_df <- na.omit(DTM_CS_df)%>% mutate(Distance=dst,Elevation=DTM)
+    DTM_plot_df <- na.omit(DTM_CS_df)%>% mutate(Distance=dst,Elevation=DTM,
+                                                x_next = lead(Distance), y_next = lead(Elevation))
     DEM_plot_df=read.csv("data/DEMs/DEM_plot_empty.csv") %>%
-      mutate(Elevation=max(CS_model_system_ll$top_layer))
+      mutate(Elevation=max(CS_model_system_ll$top_layer,`Unit Name`=NA))
     cols_DEMs="#000000"
   }
   
@@ -889,6 +891,15 @@ cs_model=function(in_param)
     }  
   }
   
+  if(NROW(actiev_library_n)>0){
+    #DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    p=p+    
+    geom_path(data=DEM_plot_df, aes(x=Distance,y=Elevation,colour=`Unit Name`,label=Depth),na.rm = T,
+              size=ifelse(NROW(actiev_library_n)>0 | exists("DEM_rst",where=additional_layers_lst)==T,0.7,0),show.legend =T,linetype = "dashed") +
+    scale_colour_manual(values=cols_DEMs,guide = FALSE)+
+      new_scale_color()  
+  }
+  
   #DTM ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   p=p+  
     geom_segment(data=DTM_plot_df,aes(xend = x_next, yend = y_next,x=Distance,y=Elevation,colour = Symbol,group=1),show.legend = surf_status, size=1) +
@@ -900,10 +911,6 @@ cs_model=function(in_param)
               size = ifelse(NROW(actiev_library_n)>0 | exists("DEM_rst",where=additional_layers_lst)==T,0.05*ls,0),angle=45) +
     scale_colour_manual(values=cols_DEMs,guide = FALSE) +
     new_scale("new_aes") +
-    #DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    geom_path(data=DEM_plot_df, aes(x=Distance,y=Elevation,colour=`Unit Name`,label=Depth),na.rm = T,
-              size=ifelse(NROW(actiev_library_n)>0 | exists("DEM_rst",where=additional_layers_lst)==T,0.7,0),show.legend =T,linetype = "dashed") +
-    scale_fill_manual(values=cols_DEMs,guide = FALSE) +
     # base - formation and location ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geom_rect(data=CS_model_system_ll,
               aes(xmin = dst, xmax = dst+prop_fac, ymin = bot_layer,
@@ -961,11 +968,11 @@ cs_model=function(in_param)
     geom_text(data = CS_model_system_unit_dst,
               aes(x = dst,y=top+0.3*space,label =round(top,0)), colour ="black",size =0.05*ls,alpha=0.9)+ # top
     ggrepel::geom_text_repel(data = CS_model_system_unit_dst,
-              aes(x = dst,y=bot-0.1*space,label =paste0("TD=",round(bot,0))),
-              colour = "black", fill = alpha(c("white"),0.7),size = 0.05*ls,alpha=1,
-              max.overlaps = 100) + # bot
+                             aes(x = dst,y=bot-0.1*space,label =paste0("TD=",round(bot,0))),
+                             colour = "black", fill = alpha(c("white"),0.7),size = 0.05*ls,alpha=1,
+                             max.overlaps = 100) + # bot
     ggrepel::geom_text_repel(data = CS_model_system_unit_dst,
-              aes(x = dst,y=top+0.8*space,label =name), colour ="black",angle = 45,size =0.1*ls,alpha=0.9,max.overlaps = 20) + # name
+                             aes(x = dst,y=top+0.8*space,label =name), colour ="black",angle = 45,size =0.1*ls,alpha=0.9,max.overlaps = 20) + # name
     # Reset Final Dims ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     scale_y_continuous(breaks = seq(total_y_min,total_y_max, by=vertical_resolution),
                        limits = c(total_y_min,max(max_DEM+1.5*space,total_y_max)))+

@@ -142,6 +142,7 @@ tab_tbl=NULL
 horizons_db=NULL
 segment_id=0
 lines_db<<-NULL
+dlt_optn="active"
 
 # Additional Layers
 additional_layers_df=read.csv(paste0(design_pth,"/additional_layers_ids_V1.csv"))
@@ -1180,7 +1181,10 @@ server <- function(input, output, session) {
                    }
                    if(!is.null(charts)) {
                      if(charts$cs_data$cs_id==input$cs_id){
-                       messeges_lst[[i_msg]]="Warning 2: Cross section with this ID already exists in the system, the existing cross section will be replace.";i_msg=i_msg+1
+                       messeges_lst[[i_msg]]="Warning 2: Cross section with this ID already exists in the system. It is not possible to build a geological model with the help of the cross section.";i_msg=i_msg+1
+                       cln_tmprl()
+                       dlt_optn="inactive"
+                       rm(charts)
                      }
                    }
                    
@@ -1245,7 +1249,6 @@ server <- function(input, output, session) {
                                     shinyjs::html("cs_messages", "")
                                     charts<<-cs_model(in_param=CS_Prameters)
                                     # Directly Sub products
-                                    cln_tmprl()
                                     current_line<<-st_as_sf(charts$cs_data$CS_line) %>% st_set_crs(4326)
                                   },
                                   message = function(m) {
@@ -1288,13 +1291,16 @@ server <- function(input, output, session) {
                        write.csv(horizons_db,file, row.names = F)
                      }
                    )
-                   # Upload Cross Esction Download Butten -------------------------------------------------
+                   # Upload Cross Section Download Butten -------------------------------------------------
                    output$cs_tagging<-renderPlot({
                      req(charts$cs_raw)
+                     
                      if(!is.null(horizons_db)){
                        # Get Junction Points --------------------------------------------------------------
+                       message("Get Junction Points")
                        nodes_links_df=nodes_linker(current_line,lines_db,horizons_db)
-                       # Render CS ------------------------------------------------------------------------
+                       # Render Initial CS ------------------------------------------------------------------
+                       message("Render Initial CS")
                        cols_classf<<-ColourExpreation()
                        cs_tagging<<-charts$cs_raw+geom_text(data=nodes_links_df,
                                                             aes(x=Distance,y=Elevation,color=Horizon,size=7,label=ID)) +
@@ -1303,12 +1309,12 @@ server <- function(input, output, session) {
                      } else {
                        cs_tagging<<-charts$cs_raw
                        cs_tagging}
-                     
-                     
                    })
                    # Update Selection list ----------------------------------------------------------------
                    observe({
                      by_v=reactiveVal({input$Select_horizon_by})
+                     message("Update Selection list")
+                     
                      if(as.character(by_v())=="Wells"){
                        cs_horizons<<-dplyr::distinct(charts$cs_data$wells_plot_df,f_name,.keep_all = T)
                        cols_classf<<-ColourExpreation()
@@ -1327,6 +1333,7 @@ server <- function(input, output, session) {
                    })
                    # Set Initial Table --------------------------------------------------------------------
                    if(!is.null(tab_raw)==T){tab_raw=NULL}
+                   message("Set Initial Table")
                    clickposition_history <- reactiveVal(data.frame(Distance = numeric(),Longitude=numeric(),
                                                                    Latitude=numeric(),Range=numeric(),
                                                                    Elevation = numeric(),Horizon=character(),
@@ -1341,10 +1348,11 @@ server <- function(input, output, session) {
                        slc_tbl
                      }) 
                    }
-
+                   
                    # Add new point ========================================================================
                    observeEvent(input$plot_click, {
                      print(tab_raw)
+                     message("Add new point")
                      new_point_ll=horizonewpnt(
                        Select_horizon=input$Select_horizon,
                        cs_horizons=cs_horizons,
@@ -1355,23 +1363,29 @@ server <- function(input, output, session) {
                      new_point_ll$Segment=segment_id
                      # Check point class ------------------------------------------------------------------
                      if(nrow(tab_raw)>0){
+                       message("Check point class")
                        tab_check=tab_raw %>%
                          mutate(int_dist=((Distance-new_point_ll$Distance)^2+(Elevation-new_point_ll$Elevation)^2)^0.5,
                                 pnt2erase=ifelse(int_dist<input$Eraser_sensitivity & Horizon==input$Select_horizon,1,0)) %>% 
                          dplyr::filter(.,pnt2erase==0)
                        
-                       if (nrow(tab_check)<nrow(tab_raw) & nrow(tab_raw)>0) {
-                         message("Delete Point") # Delete Point ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                         tab_raw<<-dplyr::distinct(dplyr::select(tab_check,-int_dist,-pnt2erase),Distance,Elevation,ID,.keep_all = T) %>% arrange(desc(Distance))
+                       if (nrow(tab_check)<nrow(tab_raw)) { # nrow(tab_raw)>0
+                         if(dlt_optn=="active"){
+                           message("Delete Point") # Delete Point ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                           tab_raw<<-dplyr::distinct(dplyr::select(tab_check,-int_dist,-pnt2erase),Distance,Elevation,ID,.keep_all = T) %>% arrange(desc(Distance))
+                         }
                        } else {
                          message("Add Point") # Join to Current DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                          tab_raw<<-dplyr::distinct(rbind(tab_raw, new_point_ll),Distance,Elevation,ID,.keep_all = T) %>% arrange(desc(Distance))
+                         dlt_optn="active"
                        }
                      } else { # New Point ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                       message("New Point")
                        tab_raw<<-new_point_ll
                      }
                      # Connect between points -------------------------------------------------------------
                      if(input$h_int!="NaN" & nrow(tab_raw)>1){
+                       message("Connect between points")
                        # Fill horizons by group 
                        horizons2fill=as.data.frame(t(table(tab_raw$Horizon))) %>% rename_all(~(c("ID","Horizon","n")))
                        tab_lst=list()
@@ -1389,7 +1403,10 @@ server <- function(input, output, session) {
                          }
                        }
                        tab<<-Reduce(rbind,tab_lst)  
-                     } else{tab<<-subset(tab_raw,,c("Elevation","Distance","Horizon","Segment","method","ID"))}
+                     } else{
+                       message("Do not connect between points")
+                       tab<<-subset(tab_raw,,c("Elevation","Distance","Horizon","Segment","method","ID"))
+                       }
                      
                      
                      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1398,10 +1415,12 @@ server <- function(input, output, session) {
                      write.csv(charts$cs_data$wells_plot_df, paste0(Background_path,'/Apps/External_Data/wells_plot_df.csv'))  #  Local Test file
                      #%%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                      
-                     # Render Cross Section & and table ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                     # Render Cross Section & and table ---------------------------------------
                      cols_DEMs=ColourExpreation_DEM()
                      output$cs_tagging <- renderPlot({
                        req(cs_tagging)
+                       message("Render Cross Section & and table")
+                       
                        tab_view=tab_raw
                        if(input$h_int!="NaN" & nrow(tab_raw)>1){
                          common_cols= c("Elevation","Distance","Horizon","Segment","method","ID")
@@ -1419,8 +1438,9 @@ server <- function(input, output, session) {
                                     )) +
                          scale_fill_manual(values=cols_classf)
                      })
-                     # Render Table
+                     # Render Table -----------------------------------------------------------
                      output$info = DT::renderDataTable({
+                       message("Render Table")
                        tab_tbl = dplyr::filter(tab_raw,Horizon==input$Select_horizon)
                        slc_tbl<-DT::datatable(tab_tbl,
                                               class="cell-border",
@@ -1432,10 +1452,11 @@ server <- function(input, output, session) {
                    SegmentsListen <- reactive({list(input$plop,input$Select_horizon)})
                    observeEvent(input$plop,{segment_id<<-segment_id+1}) # Right click
                    observeEvent(input$Select_horizon,{segment_id<<-segment_id+1}) # New horizon
-
+                   
                    ### Add to Data Base --------------------------------------------------------------
                    observeEvent(input$add2hdb,{
-                     req(tab_raw)
+                     req(nrow(tab)>0)
+                     message("Add to Data Base")
                      fill_horizons_coord=coordinate_horizons(
                        fill_horizons=tab,
                        DEM_plot_df=charts$cs_data$DEM_plot_df,
@@ -1459,26 +1480,28 @@ server <- function(input, output, session) {
                      # Current line to DB
                      current_line$cs_id=input$cs_id
                      if (input$cs_id!="A"){
-                      lines_db<<-bind_rows(current_line,lines_db)
+                       lines_db<<-bind_rows(current_line,lines_db)
                      } else {
                        lines_db<<-current_line
                      }
                      
                      # Clean temporal
                      cln_tmprl()
-
+                     
                      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                      write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
+                     write.csv(fill_horizons, paste0(Background_path,'/Apps/External_Data/fill_horizons.csv'))
                      st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'),delete_dsn=TRUE)
                      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-                   
+                     
                    })
                    observeEvent(input$repair,{
                      ### FIX Ranges ------------------------------------------------------------------
                      req(input$h_int!="NaN" & nrow(tab_raw)>1)
                      req(nrow(charts$cs_data$DEM_plot_df)>0)
                      req(nrow(tab)>0)
-
+                     message("FIX Ranges")
+                     
                      tab_coord=coordinate_horizons(
                        fill_horizons=tab,
                        DEM_plot_df=charts$cs_data$DEM_plot_df,
@@ -1517,7 +1540,7 @@ server <- function(input, output, session) {
                      ### Join FIX to Proper ranges ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      common_cols=c("Distance","Longitude","Latitude","Elevation","Horizon","method","ID")
                      horizons=bind_rows(subset(hproper,,c(common_cols)),
-                                         subset(tab_coord,,c(common_cols))) %>% 
+                                        subset(tab_coord,,c(common_cols))) %>% 
                        dplyr::arrange(Horizon,Distance)
                      
                      # Current line to DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1541,6 +1564,7 @@ server <- function(input, output, session) {
                      
                      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                      write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
+                     write.csv(fill_horizons, paste0(Background_path,'/Apps/External_Data/fill_horizons.csv'))
                      st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'),delete_dsn=TRUE)
                      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                      
@@ -1550,6 +1574,12 @@ server <- function(input, output, session) {
                  }  # End Cross Section
                }
                }) # End of Cross Section Rendering
+  
+  # New location for Geology Horizons System ###############################################
+  ## Active Elements ======================================================================= 
+  observeEvent(input$cs_id,{
+    dlt_optn="active"
+  })
 } # End of Server --------------------------------------------------------------------------
 
 shinyApp(ui, server,options = list(port=7990))

@@ -204,35 +204,121 @@ nodes_linker=function(current_line,lines_db,horizons_db){
     juc_pnt_i=st_intersection(current_line,lines_db_i)#  %>% st_cast("POINT") 
     # Get Horizon data
     horizons_db_st_i=dplyr::filter(horizons_db_st,cs_id == lines_db_i$cs_id)
-    
-    aa=horizons_db_st_i %>% split(.$Horizon) %>% 
-      map(~ mutate(., closest_pnt =nngeo::st_nn(juc_pnt_i,.)) %>%  select(closest_pnt) %>%
-      unlist(T,F)) 
-    bb=Reduce(cbind,aa)
-    
-    closest_pnt=horizons_db_st_i %>% 
-      group_by(Horizon) %>% 
-      group_nest() %>% 
-      mutate(closest_pnt=unlist({ map(.$data,function(df) nngeo::st_nn(juc_pnt_i,df$geometry)) }))
 
-        
-    closest_pnt=unlist(nngeo::st_nn(juc_pnt_i, horizons_db_st_i))
-    distance_on_cs=horizons_db_st_i$Distance[closest_pnt]
-    juc_i_horizons=horizons_db_st_i %>%  dplyr::filter(Distance==distance_on_cs) %>% 
-      st_drop_geometry(.) %>% dplyr::select(-cs_id) %>% na.omit(.)
+    juc_i_horizons=horizons_db_st_i %>% 
+      group_by(Horizon) %>% 
+      group_nest() %>% # Experimental function dplyr 1.0.7
+      mutate(closest_pnt=unlist({map(data,function(df) nngeo::st_nn(juc_pnt_i,df$geometry))})) %>% 
+      unnest(cols = c(data)) %>% 
+      group_by(Horizon) %>% 
+      mutate(n=1,n=cumsum(n)) %>% 
+      dplyr::filter(n==closest_pnt) %>% 
+      dplyr::select(.,names(juc_df)) %>% na.omit(.)
     juc_df=bind_rows(juc_df,juc_i_horizons)
     }
   return(juc_df)
 }
 
 
-# 6. Clean temporals ################################################################
+# 6. Clean temporals ###########################################################
 cln_tmprl=function(){
 fill_horizons_coord<<-NULL
 horizons<<-NULL
 tab_raw<<-NULL
 tab<<-NULL  
 }
+
+# 7. Fix horizons ##############################################################
+if(Type_of_runing=="u_t"){
+  fix_lst=fix_horizons(tab,
+                       DEM_plot_df=charts$cs_data$DEM_plot_df,
+                       tab_coord,
+                       cs_id=input$cs_id,
+                       horizons_db,
+                       current_line,
+                       lines_db,
+                       tor="t")
+}
+# FUNC
+fix_horizons=function(tab,DEM_plot_df,tab_coord,cs_id,horizons_db,tor){
+  #FIX
+  tab_coord=coordinate_horizons(
+    fill_horizons=tab,
+    DEM_plot_df=DEM_plot_df,
+    max_range=10
+  )
+  acth=dplyr::distinct(tab_coord,Horizon,Segment)
+  
+  rng4repair=tab_coord %>% group_by(Horizon,Segment) %>% 
+    summarise(st=min(Distance,na.rm = T),
+              ed=max(Distance,na.rm = T))
+  
+  ### Extract Proper Ranges ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  h2repair=subset(DEM_plot_df,
+                  `Unit Name` %in% acth$Horizon,
+                  c(Elevation,Distance,`Unit Name`,Longitude,Latitude)) %>% 
+    dplyr::rename(Horizon=`Unit Name`)
+  
+  hproper=left_join(h2repair,rng4repair) %>% 
+    mutate(erase=case_when(
+      Distance %between% list(st, ed) ~ 1,
+      TRUE  ~ 0
+    )
+    ) %>% group_by(Distance,Horizon) %>% 
+    mutate(erase=case_when(
+      max(erase,na.rm = T)>0 ~ T,
+      TRUE  ~ F
+    )
+    )  %>% 
+    dplyr::filter(erase==F) %>% 
+    dplyr::select(-c(Segment,st,ed)) %>% 
+    dplyr::distinct_(.dots = names(.))  %>% 
+    mutate(ID=tab_coord$ID[1],
+           method="Source",
+           Segment=NA)
+  
+  ### Join FIX to Proper ranges ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  common_cols=c("Distance","Longitude","Latitude","Elevation","Horizon","method","ID")
+  horizons=bind_rows(subset(hproper,,c(common_cols)),
+                     subset(tab_coord,,c(common_cols))) %>% 
+    dplyr::arrange(Horizon,Distance)
+  
+  # Current line to DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  current_line$cs_id=cs_id
+  if (cs_id!="A"){
+    lines_db<<-bind_rows(current_line,lines_db)
+  } else {
+    lines_db<<-current_line
+  }
+  
+  # Create ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  if(is.null(horizons_db)){
+    horizons_db<<-dplyr::distinct(horizons,Horizon,Distance,Elevation,ID,.keep_all = T)
+  } else {
+    horizons_db<<-rbind(horizons_db,horizons)
+  }
+  
+  # Open Download option ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  out_h_nme<<-"Fixed_CS-"
+  shinyjs::show("download_horizon")
+  
+  if(tor=="t"){
+    # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
+    write.csv(fill_horizons, paste0(Background_path,'/Apps/External_Data/fill_horizons.csv'))
+    st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'),delete_dsn=TRUE)
+    # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    
+  }
+  # Export ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  fix_lst=list("horizons_db"=horizons_db,"lines_db"=lines_db)
+  return(fix_lst)
+  # Clean temporal ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  cln_tmprl()  
+}
+
+
+
 
 
 
