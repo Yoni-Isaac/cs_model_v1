@@ -230,17 +230,23 @@ tab<<-NULL
 
 # 7. Fix horizons ##############################################################
 if(Type_of_runing=="u_t"){
+  write.csv(tab, paste0(Background_path,'/Apps/External_Data/tab.csv'))  #  Local Test file
+  write.csv(charts$cs_data$DEM_plot_df, paste0(Background_path,'/Apps/External_Data/DEM_plot_df.csv'))  #  Local Test file
+  write.csv(horizons, paste0(Background_path,'/Apps/External_Data/horizons.csv'))  #  Local Test file
+  write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
+  st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'))
+  st_write(lines_db,paste0(Background_path,'/Apps/External_Data/current_line.shp'))
   fix_lst=fix_horizons(tab,
                        DEM_plot_df=charts$cs_data$DEM_plot_df,
-                       tab_coord,
                        cs_id=input$cs_id,
+                       horizons,
                        horizons_db,
                        current_line,
                        lines_db,
                        tor="t")
 }
 # FUNC
-fix_horizons=function(tab,DEM_plot_df,tab_coord,cs_id,horizons_db,tor){
+fix_horizons=function(tab,DEM_plot_df,cs_id,horizons,horizons_db,current_line,lines_db,tor){
   #FIX
   tab_coord=coordinate_horizons(
     fill_horizons=tab,
@@ -283,29 +289,28 @@ fix_horizons=function(tab,DEM_plot_df,tab_coord,cs_id,horizons_db,tor){
                      subset(tab_coord,,c(common_cols))) %>% 
     dplyr::arrange(Horizon,Distance)
   
-  # Current line to DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ### Add 2 DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  if(is.null(horizons_db)==T){
+    horizons_db=dplyr::distinct(horizons,Horizon,Distance,Elevation,ID,.keep_all = T)
+  } else {
+    horizons_db=rbind(horizons_db,horizons)
+  }
+  
   current_line$cs_id=cs_id
   if (cs_id!="A"){
-    lines_db<<-bind_rows(current_line,lines_db)
+    lines_db=bind_rows(current_line,lines_db)
   } else {
-    lines_db<<-current_line
+    lines_db=current_line
   }
-  
-  # Create ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  if(is.null(horizons_db)){
-    horizons_db<<-dplyr::distinct(horizons,Horizon,Distance,Elevation,ID,.keep_all = T)
-  } else {
-    horizons_db<<-rbind(horizons_db,horizons)
-  }
-  
-  # Open Download option ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  ### Export ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Open Download option
   out_h_nme<<-"Fixed_CS-"
   shinyjs::show("download_horizon")
   
   if(tor=="t"){
     # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
-    write.csv(fill_horizons, paste0(Background_path,'/Apps/External_Data/fill_horizons.csv'))
     st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'),delete_dsn=TRUE)
     # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     
@@ -313,10 +318,68 @@ fix_horizons=function(tab,DEM_plot_df,tab_coord,cs_id,horizons_db,tor){
   # Export ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   fix_lst=list("horizons_db"=horizons_db,"lines_db"=lines_db)
   return(fix_lst)
-  # Clean temporal ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Clean temporal ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   cln_tmprl()  
 }
 
+# 8. Add horizons 2 DB  ########################################################
+if(Type_of_runing=="u_t"){
+  add_lst=add_horizons(tab,
+                       DEM_plot_df=charts$cs_data$DEM_plot_df,
+                       wells=charts$cs_data$wells_plot_df,
+                       manual_pnt=tab_raw[ID==paste0(as.character(input$cs_id),as.character(input$cs_id),"'"),],
+                       cs_id=input$cs_id,
+                       horizons,
+                       horizons_db,
+                       current_line,
+                       lines_db,
+                       tor="t")
+}
+# FUNC
+add_horizons=function(tab,DEM_plot_df,wells,manual_pnt,cs_id,horizons,horizons_db,current_line,lines_db,tor){
+  ### Create ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  tab_coord=coordinate_horizons(
+    fill_horizons=tab,
+    DEM_plot_df=DEM_plot_df,
+    max_range=10
+  )
+  
+  horizons=combine_sources(
+    wells=wells,
+    manual_pnt=manual_pnt,
+    intp_pnt=tab_coord
+  )
+  ### Add 2 DB~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  
+  if(is.null(horizons_db)==T){
+    horizons_db=dplyr::distinct(horizons,Horizon,Distance,Elevation,ID,.keep_all = T)
+  } else {
+    horizons_db=rbind(horizons_db,horizons)
+  }
+  
+  current_line$cs_id=cs_id
+  if (cs_id!="A"){
+    lines_db=bind_rows(current_line,lines_db)
+  } else {
+    lines_db=current_line
+  }
+  ### Export ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Open Download option
+  out_h_nme<<-"Horizons_CS-"
+  shinyjs::show("download_horizon")
+  
+  if(tor=="t"){
+    # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    write.csv(horizons_db, paste0(Background_path,'/Apps/External_Data/horizons_db.csv'))  #  Local Test file
+    st_write(lines_db,paste0(Background_path,'/Apps/External_Data/lines_db.shp'),delete_dsn=TRUE)
+    # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  }
+  # Export ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  add_lst=list("horizons_db"=horizons_db,"lines_db"=lines_db)
+  return(add_lst)
+  # Clean temporal ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  cln_tmprl()  
+}
 
 
 
