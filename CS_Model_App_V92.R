@@ -227,7 +227,8 @@ ui <- fluidPage(
   
   fluidRow(
     div(
-      navbarPage(title=div(img(src="app_icon_small_black.jpg"), "Cross Section Model System"),
+      navbarPage(id = "tabs",
+                 title=div(img(src="app_icon_small_black.jpg"), "Cross Section Model System"),
                  inverse = F, # for diff color view
                  theme = shinytheme("flatly"),
                  
@@ -443,7 +444,7 @@ ui <- fluidPage(
                  ## Geology Model panel =========================================
                  message("Geology Model panel"),
                  
-                 tabPanel("Build Geology Model",icon = icon("accusoft"),
+                 tabPanel(title="Build Geology Model",icon = icon("accusoft"),
                           fluidPage(
                             ### Sidebar panel for Inputs -------------------------------------------------------------
                             column(width = 2,
@@ -1301,36 +1302,16 @@ server <- function(input, output, session) {
                        nodes_links_df=nodes_linker(current_line,lines_db,horizons_db)
                        # Render Initial CS ------------------------------------------------------------------
                        message("Render Initial CS")
-                       cols_classf<<-ColourExpreation()
-                       cs_tagging<<-charts$cs_raw+geom_text(data=nodes_links_df,
-                                                            aes(x=Distance,y=Elevation,color=Horizon,size=7,label=ID)) +
-                         scale_color_manual(values=cols_classf,guide = FALSE)
+                       cs_tagging<<-charts$cs_raw+
+                         new_scale_color()+
+                         geom_label(data=nodes_links_df,aes(x=Distance,y=Elevation,color=Horizon,size=5,label=ID))+
+                         scale_colour_manual(values=cols_classf)
                        cs_tagging
                      } else {
                        cs_tagging<<-charts$cs_raw
                        cs_tagging}
                    })
-                   # Update Selection list ----------------------------------------------------------------
-                   observe({
-                     by_v=reactiveVal({input$Select_horizon_by})
-                     message("Update Selection list")
-                     
-                     if(as.character(by_v())=="Wells"){
-                       cs_horizons<<-dplyr::distinct(charts$cs_data$wells_plot_df,f_name,.keep_all = T)
-                       cols_classf<<-ColourExpreation()
-                     }
-                     if(as.character(by_v())=="Hydrogeology libraries"){
-                       cs_horizons<<-dplyr::distinct(charts$cs_data$DEM_plot_df,f_name,.keep_all = T)
-                       cols_classf<<-ColourExpreation_DEM()
-                     }
-                     if (is.null(cs_horizons)){cs_horizons <- character(0)}
-                     
-                     updateSelectInput(session,
-                                       inputId="Select_horizon",
-                                       label = "Select horizon:",
-                                       choices = as.character(cs_horizons$f_name)
-                     )
-                   })
+                   
                    # Set Initial Table --------------------------------------------------------------------
                    if(!is.null(tab_raw)==T){tab_raw=NULL}
                    message("Set Initial Table")
@@ -1425,7 +1406,7 @@ server <- function(input, output, session) {
                        if(input$h_int!="NaN" & nrow(tab_raw)>1){
                          common_cols= c("Elevation","Distance","Horizon","Segment","method","ID")
                          tab_view=rbind(subset(tab_raw,,common_cols),subset(tab,,common_cols))
-                       } 
+                       }
                        cs_tagging+
                          new_scale_fill() +
                          geom_point(data=tab_view,
@@ -1453,7 +1434,7 @@ server <- function(input, output, session) {
                    observeEvent(input$plop,{segment_id<<-segment_id+1}) # Right click
                    observeEvent(input$Select_horizon,{segment_id<<-segment_id+1}) # New horizon
                    
-                  }  # End Cross Section
+                 }  # End Cross Section
                }
                }) # End of Cross Section Rendering
   
@@ -1461,6 +1442,29 @@ server <- function(input, output, session) {
   ## Active Elements ======================================================================= 
   observeEvent(input$cs_id,{
     dlt_optn="active"
+  })
+  ### Update Selection list ----------------------------------------------------------------
+  observeEvent({input$tabs
+               input$Select_horizon_by},{
+    req(input$tabs == "Build Geology Model")
+    req(is.null(charts)!=T)
+    message("Update Selection list")
+    
+    if(input$Select_horizon_by=="Wells"){
+      cs_horizons<<-dplyr::distinct(charts$cs_data$wells_plot_df,f_name,.keep_all = T)
+      cols_classf<<-ColourExpreation()
+    }
+    if(input$Select_horizon_by=="Hydrogeology libraries"){
+      cs_horizons<<-dplyr::distinct(charts$cs_data$DEM_plot_df,f_name,.keep_all = T)
+      cols_classf<<-ColourExpreation_DEM()
+    }
+    if (is.null(cs_horizons)){cs_horizons <- character(0)}
+    
+    updateSelectInput(session,
+                      inputId="Select_horizon",
+                      label = "Select horizon:",
+                      choices = as.character(cs_horizons$f_name)
+    )
   })
   ## Export Products ================================================================
   ### Add to Data Base --------------------------------------------------------------

@@ -56,7 +56,7 @@ cs_model=function(in_param)
     DEM_line_thickness=0.2
     Save_as_PowerPoint=paste0(Background_path,'/CS_Model_V01/Products/hydrology_cs.pptx')
     Use_tamplate =F
-    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_NES.csv'))$V1) ;str_i=1 #NULL #
+    Background=NULL#as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_NAT.csv'))$V1) ;str_i=1 #NULL #
     geological_cs_surf="geomap"# geomap # "geomap_free_colors" # "blind"
     country="Israel" # "Indefinite"
     geology_200=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_200_V4.shp"))
@@ -525,8 +525,8 @@ cs_model=function(in_param)
     
     INDEX_DEMs=bind_rows(INDEX_DEMs,Index_DEMs_Dynamic)
     cols_DEMs=c(cols_DEMs,cols_DEMs_dynamic)
-  
-  
+  } 
+  if(NROW(DEMs.files)>0){
   # 2.7 Prepare DEMs data to ggplot -----------------------------------------------------------
   message("2.7 Prepare DEMs data to ggplot")
   DEMs_mlt=reshape2::melt(as.data.frame(dplyr::select(DEMs,-c("id","Longitude","Latitude"))),id=c("dst"))    
@@ -858,7 +858,7 @@ cs_model=function(in_param)
     #Title Panel ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = max_DEM+0.7*space, ymax = max_DEM+1.5*space),
               fill="gray70",alpha=0.9)
-  if(Build_Solids==T){
+  if(Build_Solids==T & NROW(DEMs.files)>1){
     #DEMs poly ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for (j in 1:NROW(librarys)){
       if (librarys$basin[j] %in% c("coastal")){
