@@ -56,8 +56,8 @@ message("Source Tools Scrips and functions")
 Background_path="G:/Geohydrology" # %%%%%%%%% Change while moved to unplugged  %%%%
 # Prodact_path=paste0(Background_path,"/Geohydrology/Apps/CS_Model_V01/Products")
 source('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
-source('scripts/CS_Model_Code_V39.R', encoding = 'UTF-8') #debugSource
-source('scripts/Horizons_Model_Code_V8.R', encoding = 'UTF-8') #debugSource
+source('scripts/CS_Model_Code_V40.R', encoding = 'UTF-8') #debugSource
+source('scripts/Horizons_Model_Code_V9.R', encoding = 'UTF-8') #debugSource
 source('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
 options(shiny.maxRequestSize = Inf)
 options(shiny.trace = F)
@@ -70,7 +70,7 @@ Sys.setlocale("LC_ALL", "Hebrew")
 modeldialog_status="Inactive"
 `%notin%` <<- Negate(`%in%`)
 charts=NULL
-tor="t" # Type_of_Run
+tor="t" # w for web ; t for test
 cs_id_i=1
 
 # Set Aotintication File =======================================================================
@@ -146,7 +146,7 @@ horizons_db=NULL
 segment_id=0
 lines_db<<-NULL
 dlt_optn="active"
-
+initial_view="inactive"
 # Additional Layers
 additional_layers_df=read.csv(paste0(design_pth,"/additional_layers_ids_V1.csv"))
 additional_layers_lst=list()
@@ -331,8 +331,7 @@ ui <- fluidPage(
                                                       'text/tab-separated-values',
                                                       'text/plain',
                                                       '.csv',
-                                                      '.tsv',
-                                                      '.shp'
+                                                      '.tsv'
                                                     )
                                           )
                                    )
@@ -444,10 +443,10 @@ ui <- fluidPage(
                           ),
                  ),
                  
-                 ## Geology Model panel =========================================
-                 message("Geology Model panel"),
+                 ## Build Horizons =============================================
+                 message("Build Horizons"),
                  
-                 tabPanel(title="Build Geology Model",icon = icon("accusoft"),
+                 tabPanel(title="Build Horizons",icon = icon("bacon"),
                           fluidPage(
                             ### Sidebar panel for Inputs -------------------------------------------------------------
                             column(width = 2,
@@ -521,6 +520,14 @@ ui <- fluidPage(
                                      )
                                    )
                             )
+                          )
+                 ),
+                 ## Build Geology Model ========================================
+                 message("Build Geology Model"),
+                 tabPanel(title="Build Geology Model",icon = icon("accusoft"),
+                          fluidPage(
+                            ### Sidebar panel for Inputs -------------------------------------------------------------
+                            ### Slider Panel for Model Building --------------------------------------------------------
                           )
                  )
       )
@@ -1080,11 +1087,13 @@ server <- function(input, output, session) {
         colnames(transforms_fltr)=  c("Longitude", "Latitude")
       } else{print("No active Faults")}
       
-      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-      write.csv(Geology_Descriptions_slc, paste0(Background_path,'/Apps/External_Data/Geology_Descriptions_slc.csv'))  #  Local Test file
-      write.csv(transforms_fltr, paste0(Background_path,'/Apps/External_Data/transforms.csv'),row.names = F)
-      st_write(st_as_sf(drawn_polyline), paste0(Background_path,'/Apps/External_Data/drawn_polyline.csv'),layer_options = "GEOMETRY=AS_WKT",delete_dsn=TRUE)
-      # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      if(tor=="t"){
+        # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        write.csv(Geology_Descriptions_slc, paste0(Background_path,'/Apps/External_Data/Geology_Descriptions_slc.csv'))  #  Local Test file
+        write.csv(transforms_fltr, paste0(Background_path,'/Apps/External_Data/transforms.csv'),row.names = F)
+        st_write(st_as_sf(drawn_polyline), paste0(Background_path,'/Apps/External_Data/drawn_polyline.csv'),layer_options = "GEOMETRY=AS_WKT",delete_dsn=TRUE)
+        # %%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      }
       
       # print to Tab the name of the CS_wells
       print("print to Tab the name of the CS_wells")
@@ -1158,16 +1167,16 @@ server <- function(input, output, session) {
     }
   })
   
-  # Run Cross Section Model ###############################################################################
+  # Run Cross Section Model ####################################################
   observeEvent(input$Get,
-               
+               ## Preprocess ===================================================
                {if(!is.null(input$file1) & is.null(input$file2)){
                  {
-                   # Get Well DT & CS line ----------------------------------------------------------------
+                   ### Get Well DT & CS line -----------------------------------
                    Geology_Descriptions_slc=data_slc()[["Geology_Descriptions_slc"]]
                    drawn_polyline=data_slc()[["drawn_polyline"]]
                    message("Rander Cross Section Model")
-                   # Inputs Test --------------------------------------------------------------------------
+                   ### Inputs Test ---------------------------------------------
                    messeges_lst=list();i_msg=1
                    if(is.null(input$mainmap_draw_stop)){
                      messeges_lst[[i_msg]]="Error 1: No line marked along the map.";i_msg=i_msg+1
@@ -1200,7 +1209,7 @@ server <- function(input, output, session) {
                        footer = NULL
                      ))
                    }
-                   # Filter by manual selecting ----------------------------------------------------
+                   ### Filter by manual selecting ------------------------------
                    if(length(input$CS_model_system_rows_current)<length(table(Geology_Descriptions_slc$well_id)) & tablet_filter=="active"){
                      wells_md_fltr=as.data.frame(data_slc()[["CS_model_system_ss"]])[input$CS_model_system_rows_current,]
                      Geology_Descriptions_slc=dplyr::filter(Geology_Descriptions_slc,name %in% wells_md_fltr$Name,)
@@ -1209,12 +1218,12 @@ server <- function(input, output, session) {
                      Geology_Descriptions_slc=bind_rows(Geology_Descriptions_slc,Virtual_dt[2:nrow(Virtual_dt),])
                      rm(Virtual_dt)
                    }
-                   # Progress Bar Initiation 
+                   ### Progress Bar Initiation ---------------------------------
                    withProgress(message = 'Cross Section building in progress',
                                 detail = 'This may take a while...', value = 0, min=0,max=360,
                                 expr = {
                                   incProgress(1/360)
-                                  #  Load Parameters --------------------------------------------------------------
+                                  ###  Load Parameters -------------------------
                                   message("Load Parameters")
                                   CS_Prameters<-list(
                                     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%% MODEL PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1246,25 +1255,26 @@ server <- function(input, output, session) {
                                     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%% MODEL PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                                   )
                                   
-                                  # Run Model ----------------------------------------------------------------------------
-                                  message("Run Model")
+                                  ## Run CS Model ==============================
+                                  message("Run CS Model")
                                   withCallingHandlers({
                                     shinyjs::html("cs_messages", "")
                                     charts<<-cs_model(in_param=CS_Prameters)
                                     # Directly Sub products
+                                    initial_view<<-"active"
                                     current_line<<-st_as_sf(charts$cs_data$CS_line) %>% st_set_crs(4326)
                                   },
                                   message = function(m) {
                                     shinyjs::html(id = "cs_messages", html = m$message, add = F)
                                   }
                                   )
-                                  # Render Preview Visualization ---------------------------------------------------------
+                                  ### Render Preview Visualization -------------
                                   output$cs_chart <- renderPlot({
                                     req(charts$cs_preview)
                                     charts$cs_preview
                                   })
                                 }) # End Progress Bar
-                   # Download Cross Sections -------------------------------------------------------------
+                   ## Download Cross Sections ==================================
                    output$cs_download_ppt <-  downloadHandler(
                      message("Download Cross Sections"),
                      filename = function() { 
@@ -1282,21 +1292,21 @@ server <- function(input, output, session) {
                      content = function(file) {
                        htmlwidgets::saveWidget(charts$cs_html,selfcontained = T, file=file)
                      })  
-                   # Update Cross section ID -----------------------------------
+                   ### Update Cross section ID ---------------------------------
                    cs_id_i<<-cs_id_i+1
                    updateSelectInput(session,
                                      inputId="cs_id",
                                      selected=cs_ids$cs_id[cs_id_i],
                                      choices = cs_ids$cs_id
                    )
-
+                   
                  }  # End Cross Section
                }
                }) # End of Cross Section Rendering
   
   # Geology Horizons System ####################################################
   observeEvent(input$tabs,{
-    req(input$tabs == "Build Geology Model")
+    req(input$tabs == "Build Horizons")
     message("Geology Horizons System - Active")
     ## Active Elements =========================================================
     observeEvent(input$cs_id,{
@@ -1305,7 +1315,7 @@ server <- function(input, output, session) {
     ### Update Selection list --------------------------------------------------
     observeEvent({input$tabs
       input$Select_horizon_by},{
-        req(input$tabs == "Build Geology Model")
+        req(input$tabs == "Build Horizons")
         req(is.null(charts)!=T)
         message("Update Selection list")
         
@@ -1330,11 +1340,12 @@ server <- function(input, output, session) {
     ### Editable Cross Section -------------------------------------------------
     output$cs_tagging<-renderPlot({
       req(charts$cs_raw)
-      
+      req(initial_view=="active")
+      initial_view="done"
       if(!is.null(horizons_db)){
         # Get Junction Points ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         message("Get Junction Points")
-        nodes_links_df=nodes_linker(current_line,lines_db,horizons_db)
+        nodes_links_df=nodes_linker(current_line,lines_db,horizons_db,cs_id=charts$cs_data$cs_id)
         # Render Initial CS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         message("Render Initial CS")
         cs_tagging<<-charts$cs_raw+
@@ -1346,7 +1357,8 @@ server <- function(input, output, session) {
         cs_tagging<<-charts$cs_raw
         cs_tagging}
     })
-    
+    # Close Initial view option until next tun ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if(initial_view=="done"){initial_view="inactive"}
     ### Set Initial Table ------------------------------------------------------
     if(!is.null(tab_raw)==T){tab_raw=NULL}
     message("Set Initial Table")
@@ -1437,7 +1449,7 @@ server <- function(input, output, session) {
         write.csv(charts$cs_data$wells_plot_df, paste0(Background_path,'/Apps/External_Data/wells_plot_df.csv'))  #  Local Test file
         #%%%%%%%%%%%%%%%%%%%%%%%%% Test Elements %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
       }
-
+      
       ### Render Cross Section & and table -------------------------------------
       cols_DEMs=ColourExpreation_DEM()
       output$cs_tagging <- renderPlot({
@@ -1471,13 +1483,13 @@ server <- function(input, output, session) {
         slc_tbl
       })  
     })
-
+    
     ## Export Products =========================================================
     ### Set Download button ----------------------------------------------------
     output$download_horizon <-downloadHandler(
       message("Download Horizons"),
       filename = function() { 
-        paste(out_h_nme,paste0(as.character(input$cs_id),as.character(input$cs_id),"'-"), Sys.Date(), ".csv", sep="")
+        paste(out_h_nme,paste0(as.character(charts$cs_data$cs_id),as.character(charts$cs_data$cs_id),"'-"), Sys.Date(), ".csv", sep="")
       },
       content = function(file) {
         write.csv(horizons_db,file, row.names = F)
@@ -1498,7 +1510,7 @@ server <- function(input, output, session) {
                            horizons_db,
                            current_line,
                            lines_db,
-                           tor="t") 
+                           tor=tor) 
       horizons_db<<-add_lst$horizons_db
       lines_db<<-add_lst$lines_db
     })
@@ -1515,11 +1527,14 @@ server <- function(input, output, session) {
                            horizons_db,
                            current_line,
                            lines_db,
-                           tor="t")
+                           tor=tor)
       horizons_db<<-fix_lst$horizons_db
       lines_db<<-fix_lst$lines_db
     })  
   }) # End of Geology Horizons System
+  
+  # Geology Model System #######################################################  
+  ## Load External DB ==========================================================
   
 } # End of Server --------------------------------------------------------------
 
