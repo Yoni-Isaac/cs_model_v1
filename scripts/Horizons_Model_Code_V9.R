@@ -237,7 +237,8 @@ cln_tmprl=function(){
 fill_horizons_coord<<-NULL
 horizons<<-NULL
 tab_raw<<-NULL
-tab<<-NULL  
+tab<<-NULL
+cs_tagging<<-NULL
 }
 
 # 7. Fix horizons ##############################################################
