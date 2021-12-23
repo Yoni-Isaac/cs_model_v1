@@ -59,6 +59,8 @@ source('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
 source('scripts/CS_Model_Code_V40.R', encoding = 'UTF-8') #debugSource
 source('scripts/Horizons_Model_Code_V9.R', encoding = 'UTF-8') #debugSource
 source('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
+#debugSource('scripts/Geology_Model_Code_V1.R', encoding = 'UTF-8') #debugSource
+
 options(shiny.maxRequestSize = Inf)
 options(shiny.trace = F)
 options(shiny.fullstacktrace = T)
@@ -531,7 +533,14 @@ ui <- fluidPage(
                           fluidPage(
                             ### Sidebar panel for Inputs ---------------------------------------------------
                             column(width = 2,
-                                   # Model Builder - Point Size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Model Builder - Run Geology Model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   actionButton("RGM",
+                                                icon = icon("accusoft"),
+                                                style="color: #fff; background-color: #337ab7; border-color: #2e6da4",
+                                                width = "200px",
+                                                label = HTML("<span style='font-size:1.3em;'><br />Run</span>")
+                                   ),
+                                   # Model Builder - Horaizon type ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput("horizon_type", msgactionBttn(infoId="horizon_type_info",color="primary",c_label="Horizon Type:"),
                                                multiple=F,
                                                choices=c("Base","Top"),
@@ -549,6 +558,15 @@ ui <- fluidPage(
                                                multiple=T,
                                                choices=NULL),
                                    
+                                   # Model Builder - Unit Boundary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   fileInput('unit_Bounds',
+                                             msgactionBttn(infoId="unit_Bounds_info",color="primary",c_label="unit Boundary:"),
+                                             accept = c(
+                                               '.tif',
+                                               ".shp",".dbf",".sbn",".sbx",".shx",".prj"
+                                             ),
+                                             multiple=T
+                                   ),
                                    # Model Builder - Geology Blocks ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    fileInput('geology_blocks',
                                              msgactionBttn(infoId="geology_blocks_info",color="primary",c_label="Geology Blocks:"),
@@ -1637,59 +1655,129 @@ server <- function(input, output, session) {
                       inputId="cs_id",
                       selected=cs_ids$cs_id[cs_id_i],
                       choices = cs_ids$cs_id
-    )
+    )  
+  })    
+  
+  
+  # update Tab Elements ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  observeEvent(input$tabs,{
+    req(input$tabs == "Build Geology Model")
+    message("update Tab Elements")  
+    # Horizon unit 
+    if(!is.null(horizons_db)==T){
+      horizon_unit_ids= horizons_db %>%  dplyr::distinct(Horizon,.keep_all = F)
+      updateSelectInput(session,
+                        inputId="horizon_unit",
+                        selected=horizon_unit_ids$Horizon[1],
+                        choices = horizon_unit_ids$Horizon
+      )
+    }
+    # surface Geology
+    if(nrow(geology_map_act)>0){
+      sf::sf_use_s2(F)
+      geology_map_ids=st_drop_geometry(geology_map_act) %>%   dplyr::distinct(Name_Eng,.keep_all = F)
+      sf::sf_use_s2(T)
+      updateSelectInput(session,
+                        inputId="surface_unit",
+                        selected=geology_map_ids$Name_Eng[1],
+                        choices = geology_map_ids$Name_Eng
+      )  
+    }
     
-    # update Tab Elements ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    observeEvent(input$tabs,{
-      req(input$tabs == "Build Geology Model")
-      message("update Tab Elements")  
-      # Horizon unit 
-      if(!is.null(horizons_db)==T){
-        horizon_unit_ids= horizons_db %>%  dplyr::distinct(Horizon,.keep_all = F)
-        updateSelectInput(session,
-                          inputId="horizon_unit",
-                          selected=horizon_unit_ids$Horizon[1],
-                          choices = horizon_unit_ids$Horizon
-        )
-      }
-      # surface Geology
-      if(nrow(geology_map_act)>0){
-        sf::sf_use_s2(F)
-        geology_map_ids=st_drop_geometry(geology_map_act) %>%   dplyr::distinct(Name_Eng,.keep_all = F)
-        sf::sf_use_s2(T)
-        updateSelectInput(session,
-                          inputId="surface_unit",
-                          selected=geology_map_ids$Name_Eng[1],
-                          choices = geology_map_ids$Name_Eng
-        )  
-      }
+    # Observation Points
+    if(nrow(Geology_Description_ss)>0){
       
-      # Observation Points
-      if(nrow(Geology_Description_ss)>0){
+      INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "Index")) %>% 
+        #dplyr::filter(type==input$CS_type) %>% 
+        dplyr::rename("{input$CS_type}":=f_ID)
+      Geology_Description_trg<<- Geology_Description_ss %>% 
+        subset(.,,c(input$CS_type)) %>% 
+        dplyr::distinct(groups,.keep_all = F) %>% 
+        left_join(.,subset(INDEX,,c(input$CS_type,"f_name")))
       
-        INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "Index")) %>% 
-          #dplyr::filter(type==input$CS_type) %>% 
-          dplyr::rename("{input$CS_type}":=f_ID)
-        geology_map_ids= Geology_Description_ss %>% 
-          subset(.,,c(input$CS_type)) %>% 
-          dplyr::distinct(groups,.keep_all = F) %>% 
-          left_join(.,subset(INDEX,,c(input$CS_type,"f_name")))
-          
-        
-        updateSelectInput(session,
-                          inputId="observation_points",
-                          selected=geology_map_ids$f_name[1],
-                          choices = geology_map_ids$f_name
-        )  
-      }
-    })
-    
-    
+      
+      updateSelectInput(session,
+                        inputId="observation_points",
+                        selected=Geology_Description_trg$f_name[1],
+                        choices = Geology_Description_trg$f_name
+      )  
+    }
   })
   
   
+  # Load Unit Boundary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  observeEvent(input$unit_Bounds,{
+    # Get files
+    req(str_count(input$unit_Bounds)==4) 
+    inFile=input$unit_Bounds
+    # Set base proxy map
+    # proxy_basemap=leafletProxy(
+    #   mapId = "mainmap",
+    #   session = session
+    # )
+    if(any(str_detect(inFile$name,".shp"))) {
+      shp_path <- reactive({input$unit_Bounds})
+      unit_bounds_st <- Read_Shapefile(shp_path)
+      unit_bounds_st <- unit_bounds_st() %>% st_transform(.,crs=4326) 
+      # proxy_mainmap=add_element(main_map=proxy_basemap,
+      #                           ad_lyr=unit_bounds_st,
+      #                           type=input$unit_Bounds)
+    } 
+  })
+  # Load Geology Blocks ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
+  observeEvent(input$geology_blocks,{
+    # Get files
+    req(str_count(input$geology_blocks)==4) 
+    inFile=input$geology_blocks
+    # Set base proxy map
+    # proxy_basemap=leafletProxy(
+    #   mapId = "mainmap",
+    #   session = session
+    # )
+    if(any(str_detect(inFile$name,".shp"))) {
+      shp_path <- reactive({input$geology_blocks})
+      geology_blocks_st <- Read_Shapefile(geology_blocks)
+      geology_blocks_st <- geology_blocks_st() %>% st_transform(.,crs=4326) 
+      # proxy_mainmap=add_element(main_map=proxy_basemap,
+      #                           ad_lyr=geology_blocks_st,
+      #                           type=input$geology_blocks)
+    } 
+  })
   
+  ## Run Geology Model ========================================================= 
+  observeEvent(input$RGM,{
+    req(nrow(horizons_db)>0)
+    req(!is.null(input$horizon_unit)==T)
+    ### Set Parameters ---------------------------------------------------------
+    horizon_type=input$horizon_type
+    horizons_db_i = horizons_db %>% dplyr::filter(Horizon==input$horizon_unit)
+    surface_unit_st = geology_map_act %>% dplyr::filter(Name_Eng %in% input$surface_unit)
+
+    
+    INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "Index")) %>% 
+      dplyr::rename("{input$CS_type}":=f_ID)
+    
+    obs_points_i <<- Geology_Description_ss %>% 
+      subset(.,,c("well_id","Longitude","Latitude","elv","top_layer","bot_layer",input$CS_type)) %>% 
+      left_join(.,subset(INDEX,,c(input$CS_type,"f_name"))) %>% 
+      dplyr::filter(f_name %in% input$observation_points)
+    
+    if(input$horizon_type=="Base"){
+      obs_points_u = obs_points_i %>% group_by(well_id,elv) %>% 
+        dplyr::summarise(targ_dpt=max(bot_layer,na.rm = T)) 
+    } else{
+      obs_points_u = obs_points_i %>% group_by(well_id,elv) %>% 
+        dplyr::summarise(targ_dpt=min(top_layer,na.rm = T)) 
+    }
+    
+    ### Run Model ---------------------------------------------------------
+    
+    
+  aa=1  
+    
+    
+  })
   
 } # End of Server --------------------------------------------------------------
 
