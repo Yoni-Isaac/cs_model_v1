@@ -80,9 +80,9 @@ line2horizon=function(horizons_db_i,uninclod,surface_unit_i,
     names(DTM_rst)="DTM"
   }
   
-  ### 1.2.2 Subsurface Elevations ----------------------------------------------
+  # 3.2 Subsurface Elevations ==================================================
   
-  ## 1.3 Build Grid ============================================================
+  # 4. Build Grid ##############################################################
   raw_grid=raster(extent(as_Spatial(work_zone)), resolution = c(grid_reso,grid_reso),
                   crs = proj4string(as_Spatial(work_zone))) %>%
     raster::extend(., c(1,1))
@@ -91,14 +91,14 @@ line2horizon=function(horizons_db_i,uninclod,surface_unit_i,
   grid_df=st_centroid(grid_sf) %>% st_coordinates(.) %>% 
     as_tibble()
   colnames(grid_df)=c("lon","lat")
-  %>% colnames(.,)
   
-  ## 1.4 Interpolate ===========================================================
+  # 5. Interpolate #############################################################
+  ## 5.1 Classical algorithm ===================================================
   if (algorithm=="Kriging"){
-    ### 1.4.1 Kriging ----------------------------------------------------------
+    ### 5.1.1 Kriging ----------------------------------------------------------
     message(paste0("Interpolate By: ", algorithm_s))
     
-    # Build and check clean DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Build and check clean DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     xyz=horizons_db_pnt %>%  st_coordinates(.) %>% 
       as_tibble(.) %>% 
       mutate(Z=horizons_db_pnt$Elevation) %>% 
@@ -111,16 +111,17 @@ line2horizon=function(horizons_db_i,uninclod,surface_unit_i,
       stop("There are not enough points to perform the interpolation.")
     }
     
-    # Run interpolation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Run Interpolation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     tictoc::tic()
-    kriged=kriging::kriging(as.numeric(xyz$X), as.numeric(xyz$Y), as.numeric(xyz$Z), polygons=NULL, pixels=300,lags=3)
+    kriged=kriging::kriging(as.numeric(xyz$X), as.numeric(xyz$Y), as.numeric(xyz$Z),
+                            polygons=list(data.frame(grid_df$lon, grid_df$lat)), pixels=300,lags=3)
     krig_df=kriged[["map"]] %>%
       transmute(z=pred,
                 lon=x,
                 lat=y,
                 id_krig = row_number()) %>% as.data.table(.,key="id_krig")
     
-    
+    tictoc::toc()
     # fit Interpolation Values to the Grid ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     closest=RANN::nn2(subset(krig_df,,c("lon","lat")),
                       subset(grid_df,,c("lon","lat")),
@@ -129,41 +130,36 @@ line2horizon=function(horizons_db_i,uninclod,surface_unit_i,
     Grid_idx=cbind(grid_df,closest)%>%dplyr::rename(.,"id_krig"="closest") %>% as.data.table(.,key="id_krig")
     int_df=setDT(left_join(Grid_idx,subset(krig_df,,c("id_krig","z")),by="id_krig")) %>% 
       subset(.,,c("lon","lat","z")) 
-    colnames(int_df)=c("x","y","z")
-    int_rst=rasterFromXYZ(int_df,res=grid_reso,crs=4326) 
+
+    int <-df2rst(int_df,work_zone)
+    int_krg<-int
     
-    int_crp <- crop(int_rst, extent(as_Spatial(work_zone)))
-    int <- mask(int_crp, as_Spatial(work_zone))
-    tictoc::toc()
   } else if
   (algorithm_s %notin% c("Kriging", "IDW") )
   {
-    ### 1.4.1 Machine learning algorithm - Prepossessing -----------------------
-    grid_df <- horizons_db_pnt[, c("Longitude", "Latitude")]
+    ## 5.2 Machine learning algorithms =========================================
+    ## after: https://swilke-geoscience.net/post/spatial_ml/
     
-    
+    sample_sf  <- st_as_sf(
+      horizons_db_pnt, coords = c("Longitude", "Latitude")
+    )
+    grid_sf <- st_as_sf(
+      grid_df, coords = c("lon", "lat")
+    ) %>% st_set_crs(4326)
     
     # Cacl Distance Matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    ## after: https://swilke-geoscience.net/post/spatial_ml/
-    sample_dm <- st_distance(horizons_db_pnt, horizons_db_pnt) %>% 
+    sample_dm <- st_distance(sample_sf, sample_sf) %>% 
       as_tibble() %>% 
       mutate(across(everything(), as.double))
-    grid_dm <- st_distance(grid_df, horizons_db_pnt) %>% 
+    grid_dm <- st_distance(grid_sf, sample_sf) %>% 
       as_tibble() %>% 
       mutate(across(everything(), as.double))
-    
-    # Build normalize functions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    normalize <- function(x, bottom, top){ # Scale a vector  to a range from 0 to 1
-      (x - bottom) / (top - bottom)
-    }
-    
-    denormalize <- function(x, bottom, top){ # backtransform the normalized value into an interpretable/meaningful number
-      (top - bottom) * x + bottom
-    }
-    bottom_distance <- 0
-    top_distance <- max(grid_dm)
     
     # normalizing both training and grid distances ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    
+    bottom_distance <- 0
+    top_distance <- max(grid_dm)
+
     sample_dnorm <- map_dfc(
       sample_dm, 
       normalize, 
@@ -183,23 +179,23 @@ line2horizon=function(horizons_db_i,uninclod,surface_unit_i,
       z, top = max(z), bottom = min(z)
     ) 
     
+    # Sample normalized points ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    n_input <- cbind(
+      z = sample_znorm,
+      sample_dnorm
+    )
+    
     if (algorithm_s == "Neural Networks"){
-      ### 1.4.3 Neural Networks ------------------------------------------------
+      ### 5.2.1 Neural Networks ------------------------------------------------
       message(paste0("Interpolate By: ", algorithm_s))
-      
-      # Sample normalized points ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-      nn_input <- cbind(
-        z = sample_znorm,
-        sample_dnorm
-      )
       
       # Train the model by specifying its size and presenting the input.
       tictoc::tic()
       mod_nn <- neuralnet(
         z~., # column z is dependent the variable, all other columns independent
-        data = nn_input,
+        data = n_input,
         hidden = c(
-          200, 100, 50, 150
+          200, 100, 50, 150,10
         ) # Four layers of several (arbitrarily chosen) neurons
       )
       tictoc::toc()
@@ -213,18 +209,87 @@ line2horizon=function(horizons_db_i,uninclod,surface_unit_i,
         z = denormalize(
           predictions_nn, top = max(horizons_db_pnt$Elevation), bottom = min(horizons_db_pnt$Elevation)
         )
-      ) %>% 
-        mutate(model = "Neural Network")
+      )
+
+      int <-df2rst(int_df=res_nn,work_zone)
+      int_nn=int
+    }
+    
+    if (algorithm_s == "Support Vector Machine"){
+       ### 5.2.2 Support Vector Machine -----------------------------------------
+      message(paste0("Interpolate By: ", algorithm_s))
+      mod_svm <- ksvm(
+        z~., # column z is dependent the variable, all other columns independent
+        data = n_input,
+        type = "eps-bsvr",
+        kernel = "polydot",
+        C = 25 # A parameter to penalize overfitting
+      )
+      predictions_svm <- predict(mod_svm, grid_dnorm)
       
-     aa=st_as_sf(res_nn, coords = c("Longitude", "Latitude"), crs =4326,remove=F)
-     plot(aa) 
+      res_svm <- cbind(
+        grid_df,
+        z = denormalize(
+          predictions_svm, top = max(horizons_db_pnt$Elevation), bottom = min(horizons_db_pnt$Elevation)
+        )
+      )
       
+      int <-df2rst(int_df=res_svm,work_zone)
+      int_svm=int
+
+    }
+    if (algorithm_s == "Random Forests"){
+      ### 5.2.3 Random Forests -------------------------------------------------
+      message(paste0("Interpolate By: ", algorithm_s))
+
+      rf_input <- cbind(
+        z = horizons_db_pnt$Elevation,
+        sample_dm
+      )
       
-      }
+      mod_rf <- ranger(z~., data = rf_input, num.trees = 1000, mtry = 100)
+      mod_rf_norm <- ranger(z~., data = n_input, num.trees = 1000, mtry = 100)
+      
+      predictions_rf <- predict(mod_rf, grid_dm) %>% .$prediction
+      predictions_rfnorm <- predict(mod_rf_norm, grid_dnorm) %>% .$prediction
+      
+      res_rf <- cbind(
+        grid_df,
+        z = predictions_rf
+      )
+      
+      res_rfn <- cbind(
+        grid_df,
+        z = denormalize(
+          predictions_rfnorm, top = max(horizons_db_pnt$Elevation), bottom = min(horizons_db_pnt$Elevation)
+        )
+      )
+      int <-df2rst(int_df=res_rf,work_zone)
+      int_rf=int
+    }
     
   }
 }
-# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
+# Sub Functions ################################################################
+# Build normalize functions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+normalize <- function(x, bottom, top){ # Scale a vector  to a range from 0 to 1
+  (x - bottom) / (top - bottom)
+}
+
+denormalize <- function(x, bottom, top){ # backtransform the normalized value into an interpretable/meaningful number
+  (top - bottom) * x + bottom
+}
+# Convert Interpolated Grid raster ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+df2rst=function(int_df,work_zone){
+  colnames(int_df)=c("x","y","z")
+  int_rst=rasterFromXYZ(int_df,res=grid_reso,crs=4326) 
+  
+  int_crp <- crop(int_rst, extent(as_Spatial(work_zone)))
+  int <- mask(int_crp, as_Spatial(work_zone))
+  return(int)
+}
+
+
 
 
 
