@@ -549,6 +549,10 @@ ui <- fluidPage(
                                    selectInput("horizon_unit", msgactionBttn(infoId="horizon_unit_info",color="primary",c_label="Horizon Unit:"),
                                                multiple=T,
                                                choices=NULL),
+                                   # Model Builder - not included CS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   selectInput("notincluded", msgactionBttn(infoId="notincluded_info",color="primary",c_label="Not included CS's:"),
+                                               multiple=T,
+                                               choices=NULL),
                                    # Model Builder - surface Geology ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput("surface_unit", msgactionBttn(infoId="surface_unit_info",color="primary",c_label="Surface Unit:"),
                                                multiple=T,
@@ -576,11 +580,16 @@ ui <- fluidPage(
                                              ),
                                              multiple=T
                                    ),
+                                   # Model Builder - Grid Resolution ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   numericInput("grid_res", msgactionBttn(infoId="grid_res_info",color="primary",c_label="Grid Resolution [dd]:"),
+                                                min = 0.001, max = 1, value = 0.01,step=0.01),
                                    # Model Builder - Interpolation Algorithm ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput("interpolation_algorithm", msgactionBttn(infoId="interpolation_algorithm_info",color="primary",c_label="Interpolation Algorithm:"),
                                                multiple=F,
                                                choices=algorithms_s,
-                                               selected="IDW")
+                                               selected="IDW"),
+                                   # Model Builder - Algorithm Parameters ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   uiOutput("algosUI"),
                             ),
                             ### Slider Panel for Model Building --------------------------------------------------------
                           )
@@ -1620,7 +1629,7 @@ server <- function(input, output, session) {
       dplyr::summarise(do_union=F) %>%
       sf::st_cast("LINESTRING")
     
-    ### Update Cross section ID ------------------------------------------------
+    ### Classifier - Update Cross section ID -----------------------------------
     cs_id_sct= cs_ids %>%  mutate(n=row_number()) %>% 
       dplyr::filter(.,cs_id==lines_db$cs_id[nrow(lines_db)])
     cs_id_i<<-cs_id_sct$n+1
@@ -1629,7 +1638,6 @@ server <- function(input, output, session) {
                       selected=cs_ids$cs_id[cs_id_i],
                       choices = cs_ids$cs_id
     )
-    
     
     ### Set base proxy map -----------------------------------------------------
     proxy_basemap=leafletProxy(
@@ -1658,6 +1666,63 @@ server <- function(input, output, session) {
     )  
   })    
   
+  ## Set Interpolation Algorithm ===============================================
+  algorithm_v=reactive({input$interpolation_algorithm})
+  output$algosUI=renderUI({
+    if(as.character(algorithm_v())=="Kriging"){
+      column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
+      # Model Builder - Kriging model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      selectInput("kriging_mdl", msgactionBttn(infoId="kriging_mdl_info",color="primary",c_label="Kriging model:"),
+                  multiple=F,
+                  choices=c("spherical","exponential","gaussian"),
+                  selected="spherical"),
+      # Model Builder - Kriging pixels ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("kriging_pxl", msgactionBttn(infoId="kriging_pxl_info",color="primary",c_label="Pixels:"),
+                   min = 100, max = 1000, value = 300,step=50),
+      # Model Builder - Kriging lags ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("kriging_lags", msgactionBttn(infoId="kriging_lags_info",color="primary",c_label="Lags:"),
+                   min = 1, max = 10, value = 3,step=1)
+      )
+    } else if (as.character(algorithm_v())=="Neural Networks") {
+      column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
+      # Model Builder - Neural Networks, range ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericRangeInput("layers_rng", msgactionBttn(infoId="layers_rng_info",color="primary",c_label="Layers Range:"),
+                   min = 0, max = 1000, value =  c(50, 300),step=50),
+      # Model Builder - Neural Networks, number ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("layers_n", msgactionBttn(infoId="layers_n_info",color="primary",c_label="Number of layers:"),
+                   min = 1, max = 10, value = 4,step=1)
+      )
+    } else if (as.character(algorithm_v())=="Random Forests") {
+      column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
+      # Model Builder - Random Forests, normalize ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      checkboxInput("rf_normalize",  msgactionBttn(infoId="rf_normalize_info",color="primary",c_label="normalize:"),
+                    value = FALSE, width = NULL),
+      # Model Builder - Random Forests, trees ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("trees_n", msgactionBttn(infoId="trees_n_info",color="primary",c_label="Number of trees:"),
+                   min = 100, max = 3000, value = 1000,step=100),
+      # Model Builder - Random Forests, mtry ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("mtry", msgactionBttn(infoId="mtry_info",color="primary",c_label="mtry:"),
+                   min = 10, max = 1000, value = 100,step=10)
+      )
+    } else if (as.character(algorithm_v())=="Support Vector Machine") {
+      column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
+      # Model Builder - Support Vector Machine ,type ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      selectInput("svm_typ", msgactionBttn(infoId="svm_typ_info",color="primary",c_label="SVM type:"),
+                  multiple=F,
+                  choices=c("eps-svr","nu-svr","eps-bsvr"),
+                  selected="eps-svr"),
+      # Model Builder - Support Vector Machine, kernel ~~~~~~~~~~~~~~~~~~~~~~~~~
+      selectInput("kernel", msgactionBttn(infoId="kernel_info",color="primary",c_label="Kernel:"),
+                  multiple=F,
+                  choices=c("polydot","rbfdot","tanhdot","laplacedot","besseldot"),
+                  selected="polydot"),
+      # Model Builder - Support Vector Machine, C value ~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("svmc_v", msgactionBttn(infoId="svmc_v_info",color="primary",c_label="C:"),
+                   min = 1, max = 50, value = 25,step=1)
+      )
+      
+    }
+  })
   
   # update Tab Elements ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   observeEvent(input$tabs,{
@@ -1670,6 +1735,20 @@ server <- function(input, output, session) {
                         inputId="horizon_unit",
                         selected=horizon_unit_ids$Horizon[1],
                         choices = horizon_unit_ids$Horizon
+      )
+    }
+    
+    ### Model Builder - Update Cross section ID --------------------------------
+    if(!is.null(horizons_db)==T){
+      notincluded_ids=dplyr::distinct(horizons_db,ID)
+      
+      cs_id_sct= cs_ids %>%  mutate(n=row_number()) %>% 
+        dplyr::filter(.,cs_id==lines_db$cs_id[nrow(lines_db)])
+      cs_id_i<<-cs_id_sct$n+1
+      updateSelectInput(session,
+                        inputId="notincluded",
+                        selected=NULL,
+                        choices =notincluded_ids$ID
       )
     }
     # surface Geology
@@ -1753,7 +1832,7 @@ server <- function(input, output, session) {
     horizon_type=input$horizon_type
     horizons_db_i = horizons_db %>% dplyr::filter(Horizon==input$horizon_unit)
     surface_unit_st = geology_map_act %>% dplyr::filter(Name_Eng %in% input$surface_unit)
-
+    
     
     INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "Index")) %>% 
       dplyr::rename("{input$CS_type}":=f_ID)
@@ -1774,7 +1853,7 @@ server <- function(input, output, session) {
     ### Run Model ---------------------------------------------------------
     
     
-  aa=1  
+    aa=1  
     
     
   })
