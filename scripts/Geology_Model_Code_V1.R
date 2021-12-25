@@ -16,7 +16,7 @@ library(kernlab)   # Support Vector Machine
 tictoc::tic()
 # # Unit = Top Senon
 horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/horizons_db_i.csv")
-uninclod="GG'"
+notincluded="GG'"
 surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp")
 country="Israel"
 grid_reso=0.01
@@ -24,9 +24,11 @@ obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Ele
 unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326)
 geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326)
 algorithm_s="Kriging"
-source("G:/Temporary_Scripts/idw_try.R")
 
-line2horizon=function(horizons_db_i,surface_unit_i,country,obs_points_u,unit_bounds_st,geology_blocks_st){
+algo_parms = ????
+source("G:/Temporary_Scripts/idw_try.R")
+line2horizon=function(horizons_db_i,surface_unit_i,
+                      country,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s,algo_parms){
   
 }
 
@@ -38,13 +40,13 @@ chack_C=plot(horizon_fix_lst$chack,
              breaks = c(round(horizon_fix_lst$chack@data@min,0),5,50, 100, round(horizon_fix_lst$chack@data@max,0)), 
              col = rainbow(6))
 
-line2horizon=function(horizons_db_i,uninclod,surface_unit_i,
+line2horizon=function(horizons_db_i,notincluded,surface_unit_i,
                       country,grid_reso,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s){
   
   # 1. Get Core DB #############################################################
   message("1. Get Core DB")
   horizons_db_pnt= st_as_sf(horizons_db_i, coords = c("Longitude", "Latitude"), crs =4326,remove=F) %>% 
-    dplyr::filter(!is.na(Elevation)) %>% dplyr::filter(ID %notin% uninclod)
+    dplyr::filter(!is.na(Elevation)) %>% dplyr::filter(ID %notin% notincluded)
   
   # 2. Set Zones ###############################################################
   ## 2.1 General Boundary ======================================================
