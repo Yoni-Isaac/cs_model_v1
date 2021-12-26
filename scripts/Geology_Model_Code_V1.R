@@ -14,36 +14,45 @@ library(neuralnet) # Neural Networks
 library(kernlab)   # Support Vector Machine 
 
 # Unit Test ####################
-tictoc::tic()
+
 # # Unit = Top Senon
-horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/horizons_db_i.csv")
-notincluded="GG'"
-surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp")
-country="Israel"
-grid_reso=0.01
-obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv")
-unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326)
-geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326)
-  #
-  algorithm_s="Kriging" ; ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3)
-  algorithm_s="Random Forests" ; ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100)
-  algorithm_s="Neural Networks" ; ap_lst=list(layers_rng=c(10,200), layers_n=5)
-  algorithm_s="Support Vector Machine" ; ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
-  #
+if(Type_of_runing=="u_t"){
+  tictoc::tic()
+  geomodel_lst=line2horizon(
+    horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/horizons_db_i.csv"),
+    notincluded="GG'",
+    surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp"),
+    country="Israel",
+    grid_reso=0.01,
+    obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv"),
+    unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326),
+    geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326),
+    #
+    algorithm_s="Kriging",
+    ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3),
+    # algorithm_s="Random Forests",
+    # ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
+    # algorithm_s="Neural Networks",
+    # ap_lst=list(layers_rng=c(10,200), layers_n=5),
+    # algorithm_s="Support Vector Machine",
+    # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
+    #
+    export2=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/gmgrid_pnt.shp"))
+  )
+  tictoc::toc()
+  
+  # Export
+  saveWidget(horizon_prod_lst$horizon_map, file=paste0("Q:/Projects/Open/Models/Esat_Mt/data/ANA/Horizons/JUDEA_LOWER/",Horizon_v,'_3.html'),selfcontained =T )
+  writeRaster(horizon_fix_lst$horizon_fix, paste0("Q:/Projects/Open/Models/Esat_Mt/data/ANA/Horizons/JUDEA_LOWER/",Horizon_v,"_3.tif"),overwrite=T)
+  # Check raster
+  chack_C=plot(horizon_fix_lst$chack, 
+               breaks = c(round(horizon_fix_lst$chack@data@min,0),5,50, 100, round(horizon_fix_lst$chack@data@max,0)), 
+               col = rainbow(6))
+}
 
-
-
-# Export
-saveWidget(horizon_prod_lst$horizon_map, file=paste0("Q:/Projects/Open/Models/Esat_Mt/data/ANA/Horizons/JUDEA_LOWER/",Horizon_v,'_3.html'),selfcontained =T )
-writeRaster(horizon_fix_lst$horizon_fix, paste0("Q:/Projects/Open/Models/Esat_Mt/data/ANA/Horizons/JUDEA_LOWER/",Horizon_v,"_3.tif"),overwrite=T)
-# Check raster
-chack_C=plot(horizon_fix_lst$chack, 
-             breaks = c(round(horizon_fix_lst$chack@data@min,0),5,50, 100, round(horizon_fix_lst$chack@data@max,0)), 
-             col = rainbow(6))
-
-# FUNC
+# FUNC ################
 line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
-                      country,grid_reso,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s,ap_lst){
+                      country,grid_reso,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s,ap_lst,export2){
   
   # 1. Get Core DB #############################################################
   message("1. Get Core DB")
@@ -56,6 +65,7 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
   
   if(!is.null(unit_bounds_st)==T){
     message("Set general boundary by extranl layer")
+    sf::sf_use_s2(FALSE)
     work_zone=st_transform(unit_bounds_st,crs = 4326) %>% st_make_valid(.) %>%  st_union(.) %>% 
       st_cast(.,to="POLYGON")
   } else {.
@@ -66,29 +76,30 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
   }
   ## 2.2 Sub Boundary ==========================================================
   if(!is.null(geology_blocks_st)==T){
-    message("1.2.2 Sub Boundary")
+    message("2.2 Sub Boundary")
     work_zone = st_intersection(work_zone,subset(geology_blocks_st,,c(geometry))) 
   }
   
   # 3. Set Elevations ##########################################################     
-  message("1.2 Set Elevations")
+  message("3. Set Elevations")
   ## 3.1 Surface Elevation =====================================================
   dem_pth = "data/DEMs"
+  work_zone_sp=sf::as_Spatial(st_zm(work_zone, drop = TRUE, what = "ZM"))
   if(country=="Israel"){
-    DTM_rst=raster::crop(raster(paste0(dem_pth,"/DTM.tif")),work_zone)
+    DTM_rst=raster::crop(raster(paste0(dem_pth,"/DTM.tif")),work_zone_sp)
   } else if (exists("DTM_rst",where=additional_layers_lst)==T) {
-    DTM_rst=raster::crop(additional_layers_lst$DTM_rst,work_zone)
+    DTM_rst=raster::crop(additional_layers_lst$DTM_rst,work_zone_sp)
     names(DTM_rst)="DTM"
   } else if (country=="Indefinite" & exists("DTM_rst",where=additional_layers_lst)==F){
-    DTM_rst=raster::crop(raster(paste0(dem_pth,"/DTM_30m.tif")),work_zone)
+    DTM_rst=raster::crop(raster(paste0(dem_pth,"/DTM_30m.tif")),work_zone_sp)
     names(DTM_rst)="DTM"
   }
   
   # 3.2 Subsurface Elevations ==================================================
   
   # 4. Build Grid ##############################################################
-  raw_grid=raster(extent(as_Spatial(work_zone)), resolution = c(grid_reso,grid_reso),
-                  crs = proj4string(as_Spatial(work_zone))) %>%
+  raw_grid=raster(extent(work_zone_sp), resolution = c(grid_reso,grid_reso),
+                  crs = proj4string(work_zone_sp)) %>%
     raster::extend(., c(1,1))
   grid_sf=st_as_sf(rasterToPolygons(raw_grid))
   raw_grid_pl=st_intersection(grid_sf,work_zone)
@@ -98,7 +109,7 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
   
   # 5. Interpolate #############################################################
   ## 5.1 Classical algorithm ===================================================
-  if (algorithm=="Kriging"){
+  if (algorithm_s=="Kriging"){
     ### 5.1.1 Kriging ----------------------------------------------------------
     message(paste0("Interpolate By: ", algorithm_s))
     
@@ -279,6 +290,14 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
     }
     
   }
+  # 6. Export Elements #########################################################
+  int_lst=list()
+  int_lst$int_rst=int
+  if(class(export2)[1]=="sf"){
+    # 6.1 Extract data to model grid ===========================================
+    int_lst$int_pnt = export2 %>%  mutate(int_z=raster::extract(int,.)) 
+  }
+  return(int_lst)
 }
 # Sub Functions ################################################################
 # Build normalize functions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
