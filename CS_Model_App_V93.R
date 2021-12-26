@@ -590,6 +590,15 @@ ui <- fluidPage(
                                                selected="IDW"),
                                    # Model Builder - Algorithm Parameters ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    uiOutput("algosUI"),
+                                   
+                                   # Model Builder - Export model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   selectInput("expm_v", msgactionBttn(infoId="iexpm_v_info",color="primary",c_label="Export Model to:"),
+                                               multiple=F,
+                                               choices=c("XYZ Grid", "Raster"),
+                                               selected="Raster"),
+                                   uiOutput("expmUI"),
+                                   
+                                   
                             ),
                             ### Slider Panel for Model Building --------------------------------------------------------
                           )
@@ -1824,6 +1833,90 @@ server <- function(input, output, session) {
     } 
   })
   
+  ### Export Target ------------------------------------------------------------ 
+  # Export Model -  Frontend
+  expm_rct=reactive({input$expm_v})
+  output$expmUI=renderUI({
+    if(as.character(expm_rct())=="Raster"){
+      # Download to
+      column(12,
+             downloadButton("dnl2rst",'Download 2 Raster')  
+      )
+    } else if (as.character(expm_rct())=="XYZ Grid") {
+      column(12,
+             # Upload Grid
+             fileInput('gomdl_grid',
+                       creditactionBttn(infoId="csgrid_info",color="default",c_label="Upload XY file",
+                                        icon= tags$i(class = "fas fa-th", style="font-size: 22px; color: blue")),
+                       accept = c(
+                         'text/csv',
+                         'text/comma-separated-values',
+                         'text/tab-separated-values',
+                         'text/plain',
+                         '.csv',
+                         '.tsv'
+                       )
+             ),
+             # Download to  
+             downloadButton("dnl2grd",'Download 2 Your Grid')
+      )
+    }
+  })
+  
+  # Export Model - Backed
+  # Raster 
+  output$dnl2rst <-  downloadHandler(
+    message("Download Geology Model"),
+    filename = function() { 
+      paste("Geology Model", Sys.Date(), ".tif", sep=""
+      )
+    },
+    content = function(file) {
+      writeRaster(geomdl$rst,selfcontained = T, filename=file)
+    })
+  
+  # Personal XYZ
+  gomdl_grid_rct <- reactive({ 
+    req(input$gomdl_grid) 
+    gmFile=fread("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/eaocen_base_xyz.csv") %>%
+      as_tibble(.) %>% 
+      mutate(across(.cols = everything(), .fns = toupper),
+             across(.cols = everything(), .fns = as.numeric))
+    nms=names(gmFile)
+    if("X" %in% nms & input$country!="Indefinite") {
+      crs_id=subset(localtiles_df,country==input$country,crs)
+      gmgrid_pnt=st_as_sf(gmFile,
+                          coords = c("X", "Y"), crs =as.numeric(crs_id),remove=F) %>% 
+        st_transform(.,crs =4326)
+      
+      messeges_str="The coordinate system has been converted from a local projection to an international projection.
+                        There may be a deviation of few meters of the grid points."
+      showModal(modalDialog(
+        title = "Projection seting: ",
+        messeges_str,
+        easyClose = TRUE,
+        footer = NULL
+      )) 
+      
+      
+    } else {
+      gmgrid_pnt=st_as_sf(gmFile,
+                          coords = c("LON", "LAT"), crs =4326,remove=T)
+    }
+    
+    return(gmgrid_pnt)
+  })
+
+  output$dnl2grd <-  downloadHandler(
+    message("Download Geology Model"),
+    filename = function() { 
+      paste("Geology Model", Sys.Date(), ".csv", sep=""
+      )
+    },
+    content = function(file) {
+      fwrite(as.data.table(geomdl$xyz), filename=file)
+    })
+
   ## Run Geology Model ========================================================= 
   observeEvent(input$RGM,{
     req(nrow(horizons_db)>0)
@@ -1849,6 +1942,19 @@ server <- function(input, output, session) {
       obs_points_u = obs_points_i %>% group_by(well_id,elv) %>% 
         dplyr::summarise(targ_dpt=min(top_layer,na.rm = T)) 
     }
+    
+    # Algorithm Parameters
+    if(as.character(algorithm_v())=="Kriging"){
+      ap_lst=list(kriging_mdl=input$kriging_mdl, kriging_pxl=input$kriging_pxl, kriging_lags=input$kriging_lags)
+    } else if (as.character(algorithm_v())=="Neural Networks") {
+      ap_lst=list(layers_rng=input$layers_rng, layers_n=input$layers_n)
+    } else if (as.character(algorithm_v())=="Random Forests") {
+      ap_lst=list(rf_normalize=input$rf_normalize, trees_n=input$trees_n,mtry=input$mtry)
+    } else if (as.character(algorithm_v())=="Support Vector Machine") {
+      ap_lst=list(svm_typ=input$svm_typ, kernel=input$kernel,svmc_v=input$svmc_v)
+    }
+    
+    # Export Target
     
     ### Run Model ---------------------------------------------------------
     
