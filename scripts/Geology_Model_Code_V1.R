@@ -1,6 +1,7 @@
 # CSMS Moac Parameters ##############################
 Background_path="G:/Geohydrology"
 basemap_pth=paste0("data/Background_layers/BaseMaps/")
+# source("G:/Temporary_Scripts/idw_try.R")
 library(ipdw)
 library(htmltools)
 library(kriging)
@@ -23,14 +24,14 @@ grid_reso=0.01
 obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv")
 unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326)
 geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326)
-algorithm_s="Kriging"
+  #
+  algorithm_s="Kriging" ; ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3)
+  algorithm_s="Random Forests" ; ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100)
+  algorithm_s="Neural Networks" ; ap_lst=list(layers_rng=c(10,200), layers_n=5)
+  algorithm_s="Support Vector Machine" ; ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
+  #
 
-algo_parms = ????
-source("G:/Temporary_Scripts/idw_try.R")
-line2horizon=function(horizons_db_i,surface_unit_i,
-                      country,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s,algo_parms){
-  
-}
+
 
 # Export
 saveWidget(horizon_prod_lst$horizon_map, file=paste0("Q:/Projects/Open/Models/Esat_Mt/data/ANA/Horizons/JUDEA_LOWER/",Horizon_v,'_3.html'),selfcontained =T )
@@ -40,8 +41,9 @@ chack_C=plot(horizon_fix_lst$chack,
              breaks = c(round(horizon_fix_lst$chack@data@min,0),5,50, 100, round(horizon_fix_lst$chack@data@max,0)), 
              col = rainbow(6))
 
-line2horizon=function(horizons_db_i,notincluded,surface_unit_i,
-                      country,grid_reso,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s){
+# FUNC
+line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
+                      country,grid_reso,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s,ap_lst){
   
   # 1. Get Core DB #############################################################
   message("1. Get Core DB")
@@ -116,7 +118,10 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_i,
     # Run Interpolation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     tictoc::tic()
     kriged=kriging::kriging(as.numeric(xyz$X), as.numeric(xyz$Y), as.numeric(xyz$Z),
-                            polygons=list(data.frame(grid_df$lon, grid_df$lat)), pixels=300,lags=3)
+                            polygons=list(data.frame(grid_df$lon, grid_df$lat)),
+                            model=ap_lst$kriging_mdl,
+                            pixels=ap_lst$kriging_pxl,
+                            lags=ap_lst$kriging_lags)
     krig_df=kriged[["map"]] %>%
       transmute(z=pred,
                 lon=x,
@@ -132,7 +137,7 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_i,
     Grid_idx=cbind(grid_df,closest)%>%dplyr::rename(.,"id_krig"="closest") %>% as.data.table(.,key="id_krig")
     int_df=setDT(left_join(Grid_idx,subset(krig_df,,c("id_krig","z")),by="id_krig")) %>% 
       subset(.,,c("lon","lat","z")) 
-
+    
     int <-df2rst(int_df,work_zone)
     int_krg<-int
     
@@ -161,7 +166,7 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_i,
     
     bottom_distance <- 0
     top_distance <- max(grid_dm)
-
+    
     sample_dnorm <- map_dfc(
       sample_dm, 
       normalize, 
@@ -191,14 +196,18 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_i,
       ### 5.2.1 Neural Networks ------------------------------------------------
       message(paste0("Interpolate By: ", algorithm_s))
       
+      # Prep UI inputs
+      st=ap_lst$layers_rng[1]
+      ed=ap_lst$layers_rng[2]
+      hidden_c=seq(st,ed,(ed-st)/ap_lst$layers_n)
+      
+      
       # Train the model by specifying its size and presenting the input.
       tictoc::tic()
       mod_nn <- neuralnet(
         z~., # column z is dependent the variable, all other columns independent
         data = n_input,
-        hidden = c(
-          200, 100, 50, 150,10
-        ) # Four layers of several (arbitrarily chosen) neurons
+        hidden = hidden_c # Four layers of several (arbitrarily chosen) neurons
       )
       tictoc::toc()
       
@@ -212,20 +221,20 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_i,
           predictions_nn, top = max(horizons_db_pnt$Elevation), bottom = min(horizons_db_pnt$Elevation)
         )
       )
-
+      
       int <-df2rst(int_df=res_nn,work_zone)
       int_nn=int
     }
     
     if (algorithm_s == "Support Vector Machine"){
-       ### 5.2.2 Support Vector Machine -----------------------------------------
+      ### 5.2.2 Support Vector Machine -----------------------------------------
       message(paste0("Interpolate By: ", algorithm_s))
       mod_svm <- ksvm(
         z~., # column z is dependent the variable, all other columns independent
         data = n_input,
-        type = "eps-bsvr",
-        kernel = "polydot",
-        C = 25 # A parameter to penalize overfitting
+        type = ap_lst$svm_typ,
+        kernel =ap_lst$kernel,
+        C = ap_lst$svmc_v # A parameter to penalize overfitting
       )
       predictions_svm <- predict(mod_svm, grid_dnorm)
       
@@ -238,34 +247,33 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_i,
       
       int <-df2rst(int_df=res_svm,work_zone)
       int_svm=int
-
+      
     }
     if (algorithm_s == "Random Forests"){
       ### 5.2.3 Random Forests -------------------------------------------------
       message(paste0("Interpolate By: ", algorithm_s))
-
+      
       rf_input <- cbind(
         z = horizons_db_pnt$Elevation,
         sample_dm
       )
-      
-      mod_rf <- ranger(z~., data = rf_input, num.trees = 1000, mtry = 100)
-      mod_rf_norm <- ranger(z~., data = n_input, num.trees = 1000, mtry = 100)
-      
-      predictions_rf <- predict(mod_rf, grid_dm) %>% .$prediction
-      predictions_rfnorm <- predict(mod_rf_norm, grid_dnorm) %>% .$prediction
-      
-      res_rf <- cbind(
-        grid_df,
-        z = predictions_rf
-      )
-      
-      res_rfn <- cbind(
-        grid_df,
-        z = denormalize(
-          predictions_rfnorm, top = max(horizons_db_pnt$Elevation), bottom = min(horizons_db_pnt$Elevation)
+      if(ap_lst$rf_normalize==T){
+        mod_rf_norm <- ranger(z~., data = n_input, num.trees = ap_lst$trees_n, mtry = ap_lst$mtry)
+        predictions_rfnorm <- predict(mod_rf_norm, grid_dnorm) %>% .$prediction
+        res_rf <- cbind(
+          grid_df,
+          z = denormalize(
+            predictions_rfnorm, top = max(horizons_db_pnt$Elevation), bottom = min(horizons_db_pnt$Elevation)
+          )
         )
-      )
+      } else {
+        mod_rf <- ranger(z~., data = rf_input, num.trees = ap_lst$trees_n, mtry = ap_lst$mtry)
+        predictions_rf <- predict(mod_rf, grid_dm) %>% .$prediction
+        res_rf <- cbind(
+          grid_df,
+          z = predictions_rf
+        )
+      }
       int <-df2rst(int_df=res_rf,work_zone)
       int_rf=int
     }
