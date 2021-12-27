@@ -23,31 +23,28 @@ if(Type_of_runing=="u_t"){
     notincluded="GG'",
     surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp"),
     country="Israel",
-    grid_reso=0.01,
+    grid_reso=0.005,
     obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv"),
-    unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326),
+    unit_bounds_st=NULL, # st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326),
     geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326),
     #
-    algorithm_s="Kriging",
-    ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3),
+    # algorithm_s="Kriging",
+    # ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3),
     # algorithm_s="Random Forests",
     # ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
     # algorithm_s="Neural Networks",
     # ap_lst=list(layers_rng=c(10,200), layers_n=5),
-    # algorithm_s="Support Vector Machine",
-    # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
+    algorithm_s="Support Vector Machine",
+    ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
     #
     export2=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/gmgrid_pnt.shp"))
   )
   tictoc::toc()
   
-  # Export
-  saveWidget(horizon_prod_lst$horizon_map, file=paste0("Q:/Projects/Open/Models/Esat_Mt/data/ANA/Horizons/JUDEA_LOWER/",Horizon_v,'_3.html'),selfcontained =T )
-  writeRaster(horizon_fix_lst$horizon_fix, paste0("Q:/Projects/Open/Models/Esat_Mt/data/ANA/Horizons/JUDEA_LOWER/",Horizon_v,"_3.tif"),overwrite=T)
   # Check raster
-  chack_C=plot(horizon_fix_lst$chack, 
-               breaks = c(round(horizon_fix_lst$chack@data@min,0),5,50, 100, round(horizon_fix_lst$chack@data@max,0)), 
-               col = rainbow(6))
+  plot(geomodel_lst$int_rst)
+  plot(subset(geomodel_lst$int_pnt,,c(int_z)))
+  write.csv(st_drop_geometry(geomodel_lst$int_pnt),"G:/Geohydrology/RB/eaocen_base_svm.csv")
 }
 
 # FUNC ################
@@ -68,8 +65,8 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
     sf::sf_use_s2(FALSE)
     work_zone=st_transform(unit_bounds_st,crs = 4326) %>% st_make_valid(.) %>%  st_union(.) %>% 
       st_cast(.,to="POLYGON")
-  } else {.
-    message("Set eneral Boundary by CS DB Extent")
+  } else {
+    message("Set Boundary by CS DB Extent")
     work_zone =  st_buffer(subset(horizons_db_pnt,,c("geometry")),dist=0.05) %>% st_union(.) %>% 
       nngeo::st_remove_holes(.) %>% 
       st_simplify(dTolerance = 0.01)
@@ -77,7 +74,7 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
   ## 2.2 Sub Boundary ==========================================================
   if(!is.null(geology_blocks_st)==T){
     message("2.2 Sub Boundary")
-    work_zone = st_intersection(work_zone,subset(geology_blocks_st,,c(geometry))) 
+    #work_zone = st_intersection(work_zone,subset(geology_blocks_st,,c(geometry))) 
   }
   
   # 3. Set Elevations ##########################################################     
@@ -96,8 +93,10 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
   }
   
   # 3.2 Subsurface Elevations ==================================================
+  message("3.2 Subsurface Elevations")
   
   # 4. Build Grid ##############################################################
+  message("4. Build Grid")
   raw_grid=raster(extent(work_zone_sp), resolution = c(grid_reso,grid_reso),
                   crs = proj4string(work_zone_sp)) %>%
     raster::extend(., c(1,1))
@@ -108,6 +107,7 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
   colnames(grid_df)=c("lon","lat")
   
   # 5. Interpolate #############################################################
+  message("5. Interpolate")
   ## 5.1 Classical algorithm ===================================================
   if (algorithm_s=="Kriging"){
     ### 5.1.1 Kriging ----------------------------------------------------------
@@ -149,7 +149,7 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
     int_df=setDT(left_join(Grid_idx,subset(krig_df,,c("id_krig","z")),by="id_krig")) %>% 
       subset(.,,c("lon","lat","z")) 
     
-    int <-df2rst(int_df,work_zone)
+    int <-df2rst(int_df,grid_reso,work_zone_sp)
     int_krg<-int
     
   } else if
@@ -233,7 +233,7 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
         )
       )
       
-      int <-df2rst(int_df=res_nn,work_zone)
+      int <-df2rst(int_df=res_nn,grid_reso,work_zone_sp)
       int_nn=int
     }
     
@@ -256,7 +256,7 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
         )
       )
       
-      int <-df2rst(int_df=res_svm,work_zone)
+      int <-df2rst(int_df=res_svm,grid_reso,work_zone_sp)
       int_svm=int
       
     }
@@ -285,15 +285,16 @@ line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
           z = predictions_rf
         )
       }
-      int <-df2rst(int_df=res_rf,work_zone)
+      int <-df2rst(int_df=res_rf,grid_reso,work_zone_sp)
       int_rf=int
     }
     
   }
   # 6. Export Elements #########################################################
+  message("6. Export Elements")
   int_lst=list()
   int_lst$int_rst=int
-  if(class(export2)[1]=="sf"){
+  if(class(export2)[1] == "sf"){
     # 6.1 Extract data to model grid ===========================================
     int_lst$int_pnt = export2 %>%  mutate(int_z=raster::extract(int,.)) 
   }
@@ -309,12 +310,12 @@ denormalize <- function(x, bottom, top){ # backtransform the normalized value in
   (top - bottom) * x + bottom
 }
 # Convert Interpolated Grid raster ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-df2rst=function(int_df,work_zone){
+df2rst=function(int_df,grid_reso,work_zone_sp){
   colnames(int_df)=c("x","y","z")
   int_rst=rasterFromXYZ(int_df,res=grid_reso,crs=4326) 
   
-  int_crp <- crop(int_rst, extent(as_Spatial(work_zone)))
-  int <- mask(int_crp, as_Spatial(work_zone))
+  int_crp <- crop(int_rst, extent(work_zone_sp))
+  int <- mask(int_crp, work_zone_sp)
   return(int)
 }
 
