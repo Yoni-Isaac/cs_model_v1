@@ -59,7 +59,7 @@ source('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
 source('scripts/CS_Model_Code_V40.R', encoding = 'UTF-8') #debugSource
 source('scripts/Horizons_Model_Code_V9.R', encoding = 'UTF-8') #debugSource
 source('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
-#debugSource('scripts/Geology_Model_Code_V1.R', encoding = 'UTF-8') #debugSource
+debugSource('scripts/Geology_Model_Code_V1.R', encoding = 'UTF-8') #debugSource
 
 options(shiny.maxRequestSize = Inf)
 options(shiny.trace = F)
@@ -154,6 +154,7 @@ algorithms_s=c("IDW","Kriging","Random Forests", "Neural Networks","Support Vect
 unit_bounds_st=NULL
 geology_blocks_st=NULL
 gmgrid_pnt=NULL
+geology_map_act=NULL
 
 # Additional Layers
 additional_layers_df=read.csv(paste0(design_pth,"/additional_layers_ids_V1.csv"))
@@ -219,9 +220,17 @@ ui <- fluidPage(
     height = "50px",
     width = "50px"
   ),
-  
+  # Set Main map 
   tags$style(HTML("
                   #mainmap {
+                  position: absolute;
+                  
+                  top: 35px;
+                  }
+                  ")),
+  # Set Geology model map 
+  tags$style(HTML("
+                  #geo2d_map {
                   position: absolute;
                   
                   top: 35px;
@@ -533,7 +542,9 @@ ui <- fluidPage(
                  ## Build Geology Model ========================================
                  message("Build Geology Model"),
                  tabPanel(title="Build Geology Model",icon = icon("accusoft"),
-                          fluidPage(
+                          fluidRow(
+                            ### Background product view ----------------------------------------------------
+                            uiOutput("geo_view"),
                             ### Sidebar panel for Inputs ---------------------------------------------------
                             column(width = 2,
                                    # Model Builder - Run Geology Model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -603,8 +614,22 @@ ui <- fluidPage(
                                    
                                    
                             ),
-                            ### Slider Panel for Model Building --------------------------------------------------------
-                          )
+                            ### Slider Panel for Model Preview & edit--------------------------
+                            column(9,offset=0,
+                                   shinyjs::useShinyjs(),
+                                   textOutput("geo_messages" ),
+                                   # View type ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   shinyWidgets::prettyRadioButtons("geo_dims",label=NULL,
+                                                      choices = c("2D","3D"),
+                                                      selected = "2D",
+                                                      inline =T,
+                                                      shape ="square",
+                                                      outline=T,
+                                                      fill=T,
+                                                      thick=T),
+                                  # plotOutput("clibration_plot",height = "1200px",width = "2140px")
+                                   )
+                           )
                  )
       )
       ,
@@ -614,7 +639,7 @@ ui <- fluidPage(
 
 # Server ======================================================================================
 server <- function(input, output, session) {
-  # Load Info System ---------------------------------------------------------------------------
+  # Load Info System --------------------------------------------------------------------------
   observeEvent(input$info,once = F,priority=1, handlerExpr={
     shinyalert(
       title = "Welcome to CSMS<sup>®</sup> Software",
@@ -991,37 +1016,6 @@ server <- function(input, output, session) {
             lng=~Longitude,
             label=~name,
             group = "welnames") 
-        
-        
-        # # Render View
-        # proxy_basemap=leafletProxy(
-        #   mapId = "mainmap",
-        #   session = session,
-        # ) %>%
-        #   # clearGroup(group="geology") %>% 
-        #   addPolygons(data=geology_200_fltr,
-        #               color= ~geopal_200(Code),
-        #               fillColor= ~geopal_200(Code),
-        #               label = ~Name_Eng,
-        #               fill=T,
-        #               weight = 0,
-        #               fillOpacity = 0.7,
-        #               smoothFactor = 1,
-        #               group = "geology" # ,
-        #               # options = pathOptions(pane = "geoview")
-        #   ) %>%
-        #   addPolygons(data=geology_50_fltr,
-        #               color= ~geopal_50(Code),
-        #               fillColor= ~geopal_50(Code),
-        #               label = ~Name_Eng,
-        #               fill=T,
-        #               weight = 0,
-        #               fillOpacity = 0.7,
-        #               smoothFactor = 1,
-        #               group = "geology" # ,
-        #               # options = pathOptions(pane = "geoview")
-        #   )   
-        # 
       } else {
         showModal(
           modalDialog(
@@ -1651,7 +1645,7 @@ server <- function(input, output, session) {
                       choices = cs_ids$cs_id
     )
     
-    ### Set base proxy map -----------------------------------------------------
+    ### Change base proxy map --------------------------------------------------
     proxy_basemap=leafletProxy(
       mapId = "mainmap",
       session = session
@@ -1683,52 +1677,52 @@ server <- function(input, output, session) {
   output$algosUI=renderUI({
     if(as.character(algorithm_v())=="Kriging"){
       column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
-             # Model Builder - Kriging model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Kriging model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
              selectInput("kriging_mdl", msgactionBttn(infoId="kriging_mdl_info",color="primary",c_label="Kriging model:"),
                          multiple=F,
                          choices=c("spherical","exponential","gaussian"),
                          selected="spherical"),
-             # Model Builder - Kriging pixels ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Kriging pixels ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
              numericInput("kriging_pxl", msgactionBttn(infoId="kriging_pxl_info",color="primary",c_label="Pixels:"),
                           min = 100, max = 1000, value = 300,step=50),
-             # Model Builder - Kriging lags ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Kriging lags ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
              numericInput("kriging_lags", msgactionBttn(infoId="kriging_lags_info",color="primary",c_label="Lags:"),
                           min = 1, max = 10, value = 3,step=1)
       )
     } else if (as.character(algorithm_v())=="Neural Networks") {
       column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
-             # Model Builder - Neural Networks, range ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Neural Networks, range ~~~~~~~~~~~~~~~~~~~~~~~~~~
              numericRangeInput("layers_rng", msgactionBttn(infoId="layers_rng_info",color="primary",c_label="Layers Range:"),
                                min = 0, max = 1000, value =  c(50, 300),step=50),
-             # Model Builder - Neural Networks, number ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Neural Networks, number ~~~~~~~~~~~~~~~~~~~~~~~~~
              numericInput("layers_n", msgactionBttn(infoId="layers_n_info",color="primary",c_label="Number of layers:"),
                           min = 1, max = 10, value = 4,step=1)
       )
     } else if (as.character(algorithm_v())=="Random Forests") {
       column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
-             # Model Builder - Random Forests, normalize ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Random Forests, normalize ~~~~~~~~~~~~~~~~~~~~~~~
              checkboxInput("rf_normalize",  msgactionBttn(infoId="rf_normalize_info",color="primary",c_label="normalize:"),
                            value = FALSE, width = NULL),
-             # Model Builder - Random Forests, trees ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Random Forests, trees ~~~~~~~~~~~~~~~~~~~~~~~~~~~
              numericInput("trees_n", msgactionBttn(infoId="trees_n_info",color="primary",c_label="Number of trees:"),
                           min = 100, max = 3000, value = 1000,step=100),
-             # Model Builder - Random Forests, mtry ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Random Forests, mtry ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
              numericInput("mtry", msgactionBttn(infoId="mtry_info",color="primary",c_label="mtry:"),
                           min = 10, max = 1000, value = 100,step=10)
       )
     } else if (as.character(algorithm_v())=="Support Vector Machine") {
       column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
-             # Model Builder - Support Vector Machine ,type ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Support Vector Machine ,type ~~~~~~~~~~~~~~~~~~~~
              selectInput("svm_typ", msgactionBttn(infoId="svm_typ_info",color="primary",c_label="SVM type:"),
                          multiple=F,
                          choices=c("eps-svr","nu-svr","eps-bsvr"),
                          selected="eps-svr"),
-             # Model Builder - Support Vector Machine, kernel ~~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Support Vector Machine, kernel ~~~~~~~~~~~~~~~~~~
              selectInput("kernel", msgactionBttn(infoId="kernel_info",color="primary",c_label="Kernel:"),
                          multiple=F,
                          choices=c("polydot","rbfdot","tanhdot","laplacedot","besseldot"),
                          selected="polydot"),
-             # Model Builder - Support Vector Machine, C value ~~~~~~~~~~~~~~~~~~~~~~~~
+             # Model Builder - Support Vector Machine, C value ~~~~~~~~~~~~~~~~~
              numericInput("svmc_v", msgactionBttn(infoId="svmc_v_info",color="primary",c_label="C:"),
                           min = 1, max = 50, value = 25,step=1)
       )
@@ -1736,7 +1730,7 @@ server <- function(input, output, session) {
     }
   })
   
-  # update Tab Elements ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Update Tab Elements =======================================================
   observeEvent(input$tabs,{
     req(input$tabs == "Build Geology Model")
     message("update Tab Elements")  
@@ -1764,7 +1758,7 @@ server <- function(input, output, session) {
       )
     }
     # surface Geology
-    if(nrow(geology_map_act)>0){
+    if(!is.null(geology_map_act)==T){
       sf::sf_use_s2(F)
       geology_map_ids=st_drop_geometry(geology_map_act) %>%   dplyr::distinct(Name_Eng,.keep_all = F)
       sf::sf_use_s2(T)
@@ -1793,13 +1787,40 @@ server <- function(input, output, session) {
                         choices = Geology_Description_trg$f_name
       )  
     }
+    
+    ### Set & Switch View ------------------------------------------------------
+    # Set base 2D map
+    output$geo2d_map <- renderLeaflet({
+      leaflet(options = leafletOptions(zoomControl = F)) %>% 
+        setView(lng=35.2,lat=32.55,zoom=10) %>%
+        addProviderTiles(providers$CartoDB.Positron) %>%
+        htmlwidgets::onRender("
+                function(el,x) {
+                    geo2d_map = this;
+                }
+            ")  %>%
+        htmlwidgets::onRender("function(el, x) {
+                 L.control.zoom({ position: 'bottomright' }).addTo(this)}")
+      
+    })
+    
+    geo_dims_v=reactive({input$geo_dims})
+    output$geo_view=renderUI({
+      #req()
+      if(as.character(geo_dims_v())=="2D"){
+        leafletOutput("geo2d_map",height = "1950px",width = "3400px")
+      } else if (as.character(geo_dims_v())=="3D") {
+        # All your dreams....
+      }
+    })
+ 
   })
   
   
   # Load Unit Boundary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   observeEvent(input$unit_Bounds,{
     # Get files
-    req(str_count(input$unit_Bounds)==4) 
+    req(length(input$unit_Bounds)==4) 
     inFile=input$unit_Bounds
     # Set base proxy map
     # proxy_basemap=leafletProxy(
@@ -1809,7 +1830,7 @@ server <- function(input, output, session) {
     if(any(str_detect(inFile$name,".shp"))) {
       shp_path <- reactive({input$unit_Bounds})
       unit_bounds_st <- Read_Shapefile(shp_path)
-      unit_bounds_st <- unit_bounds_st() %>% st_transform(.,crs=4326) 
+      unit_bounds_st <<- unit_bounds_st() %>% st_transform(.,crs=4326) 
       # proxy_mainmap=add_element(main_map=proxy_basemap,
       #                           ad_lyr=unit_bounds_st,
       #                           type=input$unit_Bounds)
@@ -1819,7 +1840,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$geology_blocks,{
     # Get files
-    req(str_count(input$geology_blocks)==4) 
+    req(length(input$geology_blocks)==4) 
     inFile=input$geology_blocks
     # Set base proxy map
     # proxy_basemap=leafletProxy(
@@ -1828,8 +1849,8 @@ server <- function(input, output, session) {
     # )
     if(any(str_detect(inFile$name,".shp"))) {
       shp_path <- reactive({input$geology_blocks})
-      geology_blocks_st <- Read_Shapefile(geology_blocks)
-      geology_blocks_st <- geology_blocks_st() %>% st_transform(.,crs=4326) 
+      geology_blocks_st <- Read_Shapefile(shp_path)
+      geology_blocks_st <<- geology_blocks_st() %>% st_transform(.,crs=4326) 
       # proxy_mainmap=add_element(main_map=proxy_basemap,
       #                           ad_lyr=geology_blocks_st,
       #                           type=input$geology_blocks)
@@ -1879,16 +1900,16 @@ server <- function(input, output, session) {
     })
   
   # Personal XYZ
-  gomdl_grid_rct <- reactive({ 
+  observeEvent(input$gomdl_grid,{
     req(as.character(expm_rct())=="XYZ Grid") 
-    gmFile=input$gomdl_grid %>%
+    gmFile=fread(input$gomdl_grid$datapath) %>%
       as_tibble(.) %>% 
       mutate(across(.cols = everything(), .fns = toupper),
              across(.cols = everything(), .fns = as.numeric))
     nms=names(gmFile)
     if("X" %in% nms & input$country!="Indefinite") {
       crs_id=subset(localtiles_df,country==input$country,crs)
-      gmgrid_pnt=st_as_sf(gmFile,
+      gmgrid_pnt<<-st_as_sf(gmFile,
                           coords = c("X", "Y"), crs =as.numeric(crs_id),remove=F) %>% 
         st_transform(.,crs =4326)
       
@@ -1903,12 +1924,14 @@ server <- function(input, output, session) {
       
       
     } else {
-      gmgrid_pnt=st_as_sf(gmFile,
+      gmgrid_pnt<<-st_as_sf(gmFile,
                           coords = c("LON", "LAT"), crs =4326,remove=T)
     }
-    
-    return(gmgrid_pnt)
   })
+  # gomdl_grid_rct <- reactive({ 
+  #   
+  #   return(gmgrid_pnt)
+  # })
   
   output$dnl2grd <-  downloadHandler(
     message("Download Geology Model"),
@@ -1959,7 +1982,7 @@ server <- function(input, output, session) {
     
     # Export Target
     
-    # Run Geology Model ########################################################
+    ## Oprate Model ---------------------------------------------------------
     withProgress(message = 'Geology Model building in progress',
                  detail = 'This may take few minth', value = 0, min=0,max=360,
                  expr = {    
