@@ -18,7 +18,7 @@ library(kernlab)   # Support Vector Machine
 # # Unit = Top Senon
 if(Type_of_runing=="u_t"){
   tictoc::tic()
-  geomodel_lst=line2horizon(
+  geomodel_lst=line2horizon (
     horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/horizons_db_i.csv"),
     notincluded="GG'",
     surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp"),
@@ -48,7 +48,7 @@ if(Type_of_runing=="u_t"){
 }
 
 # FUNC ################
-line2horizon=function(horizons_db_i,notincluded,surface_unit_st,
+line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
                       country,grid_reso,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s,ap_lst,export2){
   
   # 1. Get Core DB #############################################################
