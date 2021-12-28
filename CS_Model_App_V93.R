@@ -155,6 +155,7 @@ unit_bounds_st=NULL
 geology_blocks_st=NULL
 gmgrid_pnt=NULL
 geology_map_act=NULL
+#Geology_Description_ss=NULL
 
 # Additional Layers
 additional_layers_df=read.csv(paste0(design_pth,"/additional_layers_ids_V1.csv"))
@@ -236,6 +237,11 @@ ui <- fluidPage(
                   top: 35px;
                   }
                   ")),
+  # conditionalPanel(
+  #   condition = "input.tabs=='Build Geology Model'",
+  #   useShinyjs(),
+  #   leafletOutput("geo2d_map", width="100%", height = "100%")
+  # ),
   # Browser title
   list(tags$head(HTML('<link rel="icon", href="app_icon.jpg",
                         type="image/png" />'))),
@@ -251,7 +257,7 @@ ui <- fluidPage(
                  title=div(img(src="app_icon_small_black.jpg"), "Cross Section Model System"),
                  inverse = F, # for diff color view
                  theme = shinytheme("flatly"),
-                 
+                 useShinyjs(),
                  ## Home panel ==================================================
                  message("Home panel"),
                  
@@ -547,6 +553,7 @@ ui <- fluidPage(
                             uiOutput("geo_view"),
                             ### Sidebar panel for Inputs ---------------------------------------------------
                             column(width = 2,
+                                   hr(),
                                    # Model Builder - Run Geology Model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    actionButton("RGM",
                                                 icon = icon("accusoft"),
@@ -1770,7 +1777,7 @@ server <- function(input, output, session) {
     }
     
     # Observation Points
-    if(nrow(Geology_Description_ss)>0){
+    if(!is.null(Geology_Description_ss)==T){
       
       INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "Index")) %>% 
         #dplyr::filter(type==input$CS_type) %>% 
@@ -1947,12 +1954,16 @@ server <- function(input, output, session) {
   observeEvent(input$RGM,{
     req(nrow(horizons_db)>0)
     req(!is.null(input$horizon_unit)==T)
+    req(!is.null(Geology_Description_ss)==T)
     ### Set Parameters ---------------------------------------------------------
     horizon_type=input$horizon_type
     horizons_db_i = horizons_db %>% dplyr::filter(Horizon==input$horizon_unit)
-    surface_unit_st = geology_map_act %>% dplyr::filter(Name_Eng %in% input$surface_unit)
-    
-    
+    if(!is.null(geology_map_act)==T){
+          surface_unit_st = geology_map_act %>% dplyr::filter(Name_Eng %in% input$surface_unit)
+    } else {
+      surface_unit_st=NULL
+    }
+   
     INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "Index")) %>% 
       dplyr::rename("{input$CS_type}":=f_ID)
     
