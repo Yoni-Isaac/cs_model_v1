@@ -1652,7 +1652,7 @@ server <- function(input, output, session) {
                       choices = cs_ids$cs_id
     )
     
-    ### Change base proxy map --------------------------------------------------
+    ### Map - Change base proxy map --------------------------------------------
     proxy_basemap=leafletProxy(
       mapId = "mainmap",
       session = session
@@ -1795,7 +1795,7 @@ server <- function(input, output, session) {
       )  
     }
     
-    ### Set & Switch View ------------------------------------------------------
+    ## Set & Switch View =======================================================
     # Set base 2D map
     output$geo2d_map <- renderLeaflet({
       leaflet(options = leafletOptions(zoomControl = F)) %>% 
@@ -1829,18 +1829,28 @@ server <- function(input, output, session) {
     # Get files
     req(length(input$unit_Bounds)==4) 
     inFile=input$unit_Bounds
-    # Set base proxy map
-    # proxy_basemap=leafletProxy(
-    #   mapId = "mainmap",
-    #   session = session
-    # )
-    if(any(str_detect(inFile$name,".shp"))) {
+
+      if(any(str_detect(inFile$name,".shp"))) {
       shp_path <- reactive({input$unit_Bounds})
-      unit_bounds_st <- Read_Shapefile(shp_path)
-      unit_bounds_st <<- unit_bounds_st() %>% st_transform(.,crs=4326) 
-      # proxy_mainmap=add_element(main_map=proxy_basemap,
-      #                           ad_lyr=unit_bounds_st,
-      #                           type=input$unit_Bounds)
+      unit_bounds_exp <- Read_Shapefile(shp_path)
+      unit_bounds_st <<- unit_bounds_exp() %>% st_transform(.,crs=4326) 
+      
+      # Set base proxy map
+      proxy_geo2d_map=leafletProxy(
+        mapId = "geo2d_map",
+        session = session
+      ) %>%
+        clearGroup(group="geo_bounds") %>% 
+        addPolygons(data=unit_bounds_st,
+                    color= "black",
+                    fillColor= "gray",
+                    label = NULL,
+                    fill=F,
+                    weight = 6,
+                    fillOpacity =0.2,
+                    smoothFactor = 3,
+                    group="geo_bounds")
+      
     } 
   })
   # Load Geology Blocks ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2020,7 +2030,7 @@ server <- function(input, output, session) {
                    )
                    tictoc::toc() 
                  })   
-    
+aa=1    
   }) # End of Geology model
   
 } # End of Server --------------------------------------------------------------
