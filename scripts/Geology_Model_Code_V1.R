@@ -1,6 +1,8 @@
 # CSMS Moac Parameters ##############################
 Background_path="G:/Geohydrology"
 basemap_pth=paste0("data/Background_layers/BaseMaps/")
+Type_of_runing="t"
+`%notin%` <<- Negate(`%in%`)
 # source("G:/Temporary_Scripts/idw_try.R")
 library(ipdw)
 library(htmltools)
@@ -67,7 +69,7 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
       st_cast(.,to="POLYGON")
   } else {
     message("Set Boundary by CS DB Extent")
-    work_zone =  st_buffer(subset(horizons_db_pnt,,c("geometry")),dist=0.05) %>% st_union(.) %>% 
+    work_zone =  st_buffer(subset(horizons_db_pnt[1:nrow(horizons_db_pnt),],,c("geometry")),dist=0.05) %>% st_union(.) %>% 
       nngeo::st_remove_holes(.) %>% 
       st_simplify(dTolerance = 0.01)
   }
@@ -298,6 +300,8 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
     # 6.1 Extract data to model grid ===========================================
     int_lst$int_pnt = export2 %>%  mutate(int_z=raster::extract(int,.)) 
   }
+  
+  message("Geology Model was Successfully Completed")
   return(int_lst)
 }
 # Sub Functions ################################################################
