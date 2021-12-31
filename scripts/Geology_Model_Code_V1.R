@@ -34,12 +34,10 @@ if(Type_of_runing=="u_t"){
     # ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3),
     # algorithm_s="Random Forests",
     # ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
-    # algorithm_s="Neural Networks",
-    # ap_lst=list(layers_rng=c(10,200), layers_n=5),
-    algorithm_s="Support Vector Machine",
-    ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
-    #
-    export2=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/gmgrid_pnt.shp"))
+    algorithm_s="Neural Networks",
+    ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
+    # algorithm_s="Support Vector Machine",
+    # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
   )
   tictoc::toc()
   
@@ -51,7 +49,7 @@ if(Type_of_runing=="u_t"){
 
 # FUNC ################
 line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
-                      country,grid_reso,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s,ap_lst,export2){
+                      country,grid_reso,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s,ap_lst){
   
   # 1. Get Core DB #############################################################
   message("1. Get Core DB")
@@ -69,9 +67,10 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
       st_cast(.,to="POLYGON")
   } else {
     message("Set Boundary by CS DB Extent")
-    work_zone =  st_buffer(subset(horizons_db_pnt[1:nrow(horizons_db_pnt),],,c("geometry")),dist=0.05) %>% st_union(.) %>% 
-      nngeo::st_remove_holes(.) %>% 
-      st_simplify(dTolerance = 0.01)
+    work_zone = st_as_sfc(st_bbox(horizons_db_pnt))
+    # work_zone = st_buffer(subset(horizons_db_pnt[1:nrow(horizons_db_pnt),],,c("geometry")),dist=0.05) %>% st_union(.) %>% 
+    #   nngeo::st_remove_holes(.) %>% 
+    #   st_simplify(dTolerance = 0.01)
   }
   ## 2.2 Sub Boundary ==========================================================
   if(!is.null(geology_blocks_st)==T){
@@ -294,15 +293,8 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   }
   # 6. Export Elements #########################################################
   message("6. Export Elements")
-  int_lst=list()
-  int_lst$int_rst=int
-  if(class(export2)[1] == "sf"){
-    # 6.1 Extract data to model grid ===========================================
-    int_lst$int_pnt = export2 %>%  mutate(int_z=raster::extract(int,.)) 
-  }
-  
   message("Geology Model was Successfully Completed")
-  return(int_lst)
+  return(int)
 }
 # Sub Functions ################################################################
 # Build normalize functions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
