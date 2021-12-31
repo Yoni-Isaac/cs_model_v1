@@ -615,7 +615,7 @@ ui <- fluidPage(
                                    # Model Builder - Export model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput("expm_v", msgactionBttn(infoId="iexpm_v_info",color="primary",c_label="Export Model to:"),
                                                multiple=F,
-                                               choices=c("XYZ Grid", "Raster"),
+                                               choices=c("XYZ Grid", "Raster","Contour"),
                                                selected="Raster"),
                                    uiOutput("expmUI"),
                                    
@@ -627,16 +627,16 @@ ui <- fluidPage(
                                    textOutput("geo_messages" ),
                                    # View type ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    shinyWidgets::prettyRadioButtons("geo_dims",label=NULL,
-                                                      choices = c("2D","3D"),
-                                                      selected = "2D",
-                                                      inline =T,
-                                                      shape ="square",
-                                                      outline=T,
-                                                      fill=T,
-                                                      thick=T),
-                                  # plotOutput("clibration_plot",height = "1200px",width = "2140px")
-                                   )
-                           )
+                                                                    choices = c("2D","3D"),
+                                                                    selected = "2D",
+                                                                    inline =T,
+                                                                    shape ="square",
+                                                                    outline=T,
+                                                                    fill=T,
+                                                                    thick=T),
+                                   # plotOutput("clibration_plot",height = "1200px",width = "2140px")
+                            )
+                          )
                  )
       )
       ,
@@ -1820,7 +1820,7 @@ server <- function(input, output, session) {
         # All your dreams....
       }
     })
- 
+    
   })
   
   
@@ -1829,8 +1829,8 @@ server <- function(input, output, session) {
     # Get files
     req(length(input$unit_Bounds)==4) 
     inFile=input$unit_Bounds
-
-      if(any(str_detect(inFile$name,".shp"))) {
+    
+    if(any(str_detect(inFile$name,".shp"))) {
       shp_path <- reactive({input$unit_Bounds})
       unit_bounds_exp <- Read_Shapefile(shp_path)
       unit_bounds_st <<- unit_bounds_exp() %>% st_transform(.,crs=4326) 
@@ -1899,17 +1899,28 @@ server <- function(input, output, session) {
                        )
              ),
              # Download to  
-             downloadButton("dnl2grd",'Download 2 Your Grid')
+             downloadButton("dnl2grid",'Download 2 Your Grid')
       )
+    } else if (as.character(expm_rct())=="Contour") {
+      column(12,
+             # Set Resolution
+             numericInput("contour_res", msgactionBttn(infoId="contour_res_info",
+                                                       color="primary",c_label="contour Resolution [-]:"),
+                          min = 10, max = 100, value = 10,step=10
+             ),
+             # Download to  
+             downloadButton("dnl2cont",'Download 2 Contour')
+      )
+      
     }
   })
   
-  # Export Model - Backed
+  # Export Model - Backed ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
   # Raster 
   output$dnl2rst <-  downloadHandler(
     message("Download Geology Model"),
     filename = function() { 
-      paste("Geology Model", Sys.Date(), ".tif", sep=""
+      paste("Geology Model_", Sys.Date(), ".tif", sep=""
       )
     },
     content = function(file) {
@@ -1927,7 +1938,7 @@ server <- function(input, output, session) {
     if("X" %in% nms & input$country!="Indefinite") {
       crs_id=subset(localtiles_df,country==input$country,crs)
       gmgrid_pnt<<-st_as_sf(gmFile,
-                          coords = c("X", "Y"), crs =as.numeric(crs_id),remove=F) %>% 
+                            coords = c("X", "Y"), crs =as.numeric(crs_id),remove=F) %>% 
         st_transform(.,crs =4326)
       
       messeges_str="The coordinate system has been converted from a local projection to an international projection.
@@ -1942,7 +1953,7 @@ server <- function(input, output, session) {
       
     } else {
       gmgrid_pnt<<-st_as_sf(gmFile,
-                          coords = c("LON", "LAT"), crs =4326,remove=T)
+                            coords = c("LON", "LAT"), crs =4326,remove=T)
     }
   })
   # gomdl_grid_rct <- reactive({ 
@@ -1950,14 +1961,25 @@ server <- function(input, output, session) {
   #   return(gmgrid_pnt)
   # })
   
-  output$dnl2grd <-  downloadHandler(
+  output$dnl2grid <-  downloadHandler(
     message("Download Geology Model"),
     filename = function() { 
-      paste("Geology Model", Sys.Date(), ".csv", sep=""
+      paste("Geology Model_", Sys.Date(), ".csv", sep=""
       )
     },
     content = function(file) {
-      fwrite(as.data.table(geomdl$xyz), filename=file)
+      fwrite(as.data.table(geomdl$xyz), file=file, row.names=F)
+    })
+  
+  output$dnl2cont <-  downloadHandler(
+    message("Download Geology Model"),
+    filename = function() { 
+      paste("Geology Model_", Sys.Date(), ".csv", sep=""
+      )
+    },
+    content = function(file) {
+      sf::st_write(geomdl$cont, dsn=file ,delete_dsn=T,
+                   layer_options = "GEOMETRY=AS_WKT")
     })
   
   ## Run Geology Model ========================================================= 
@@ -1969,11 +1991,11 @@ server <- function(input, output, session) {
     horizon_type=input$horizon_type
     horizons_db_i = horizons_db %>% dplyr::filter(Horizon==input$horizon_unit)
     if(!is.null(geology_map_act)==T){
-          surface_unit_st = geology_map_act %>% dplyr::filter(Name_Eng %in% input$surface_unit)
+      surface_unit_st = geology_map_act %>% dplyr::filter(Name_Eng %in% input$surface_unit)
     } else {
       surface_unit_st=NULL
     }
-   
+    
     INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "Index")) %>% 
       dplyr::rename("{input$CS_type}":=f_ID)
     
@@ -2003,14 +2025,14 @@ server <- function(input, output, session) {
     
     # Export Target
     
-    ## Oprate Model ---------------------------------------------------------
+    ## Oprate Model ------------------------------------------------------------
     withProgress(message = 'Geology Model building in progress',
                  detail = 'This may take few minth', value = 0, min=0,max=360,
                  expr = {    
                    tictoc::tic()
                    withCallingHandlers({
                      shinyjs::html("geo_messages", "")
-                     geomodel_lst<<-line2horizon(
+                     geomodel<<-line2horizon(
                        horizons_db_i=horizons_db_i,
                        notincluded=input$notincluded,
                        surface_unit_st=surface_unit_st,
@@ -2020,8 +2042,7 @@ server <- function(input, output, session) {
                        unit_bounds_st=unit_bounds_st,
                        geology_blocks_st=geology_blocks_st,
                        algorithm_s=input$interpolation_algorithm,
-                       ap_lst=ap_lst,
-                       export2=gmgrid_pnt
+                       ap_lst=ap_lst
                      )
                    },
                    message = function(m) {
@@ -2029,8 +2050,28 @@ server <- function(input, output, session) {
                    }
                    )
                    tictoc::toc() 
-                 })   
-aa=1    
+                 })
+    ## Set outpost -------------------------------------------------------------
+    geomdl<<-list()
+    
+    # Raster 
+    geomdl$rst=geomodel
+    
+    # Contour
+    if(as.character(expm_rct())=="Contour"){
+      geomdl$cont=st_as_sf(rasterToContour(geomodel,nlevels = input$contour_res))
+    } else {
+      geomdl$cont=st_as_sf(rasterToContour(geomodel,nlevels = 10))
+    }
+    
+    # XYZ Grid
+    if(as.character(expm_rct())=="XYZ Grid" & !is.null(gmgrid_pnt)==T){
+      geomdl$xyz = gmgrid_pnt %>%  mutate(int_z=raster::extract(geomodel,.)) 
+    }
+    
+    assign("geomdl",geomdl,envir = .GlobalEnv)
+    
+    aa=1    
   }) # End of Geology model
   
 } # End of Server --------------------------------------------------------------
