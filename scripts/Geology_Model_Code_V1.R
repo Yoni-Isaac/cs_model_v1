@@ -20,22 +20,40 @@ library(kernlab)   # Support Vector Machine
 # # Unit = Top Senon
 if(Type_of_runing=="u_t"){
   tictoc::tic()
+  horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/horizons_db_i.csv")
+  notincluded="GG'"
+  surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp")
+  country="Israel"
+  grid_reso=0.001
+  obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv")
+  unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326) 
+  geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326)
+  #
+  algorithm_s="Kriging"
+  ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3)
+  # algorithm_s="Random Forests",
+  # ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
+  # algorithm_s="Neural Networks",
+  # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
+  # algorithm_s="Support Vector Machine",
+  # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
+  
   geomodel_lst=line2horizon (
     horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/horizons_db_i.csv"),
     notincluded="GG'",
     surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp"),
     country="Israel",
-    grid_reso=0.005,
+    grid_reso=0.001,
     obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv"),
-    unit_bounds_st=NULL, # st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326),
-    geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326),
+    unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326) ,
+    geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326) ,
     #
-    # algorithm_s="Kriging",
-    # ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3),
+    algorithm_s="Kriging",
+    ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3),
     # algorithm_s="Random Forests",
     # ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
-    algorithm_s="Neural Networks",
-    ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
+    # algorithm_s="Neural Networks",
+    # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
     # algorithm_s="Support Vector Machine",
     # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
   )
