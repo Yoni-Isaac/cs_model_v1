@@ -58,7 +58,7 @@ Background_path="G:/Geohydrology" # %%%%%%%%% Change while moved to unplugged  %
 source('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
 source('scripts/CS_Model_Code_V40.R', encoding = 'UTF-8') #debugSource
 source('scripts/Horizons_Model_Code_V9.R', encoding = 'UTF-8') #debugSource
-source('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
+debugSource('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
 debugSource('scripts/Geology_Model_Code_V1.R', encoding = 'UTF-8') #debugSource
 
 options(shiny.maxRequestSize = Inf)
@@ -150,7 +150,7 @@ dlt_optn="active"
 initial_view="inactive"
 
 # Geology Model Builder
-algorithms_s=c("IDW","Kriging","Random Forests", "Neural Networks","Support Vector Machine")
+algorithms_s=c("Support Vector Machine","Random Forests","Neural Networks","Kriging","IDW")
 unit_bounds_st=NULL
 geology_blocks_st=NULL
 gmgrid_pnt=NULL
@@ -584,31 +584,54 @@ ui <- fluidPage(
                                                choices=NULL),
                                    
                                    # Model Builder - Unit Boundary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                                   fileInput('unit_Bounds',
-                                             msgactionBttn(infoId="unit_Bounds_info",color="primary",c_label="unit Boundary:"),
-                                             accept = c(
-                                               '.tif',
-                                               ".shp",".dbf",".sbn",".sbx",".shx",".prj"
-                                             ),
-                                             multiple=T
+                                   fluidRow(
+                                     column(width = 7,
+                                            fileInput('unit_Bounds',
+                                                      msgactionBttn(infoId="unit_Bounds_info",color="primary",c_label="Unit Boundary:"),
+                                                      accept = c(
+                                                        '.tif',
+                                                        ".shp",".dbf",".sbn",".sbx",".shx",".prj"
+                                                      ),
+                                                      multiple=T
+                                            ),
+                                     ),
+                                     column(width = 2,
+                                            actionButton("rst_Bounds", # Refresh Button
+                                                         icon = tags$i(class = "fas fa-redo", style="font-size: 20px"),
+                                                         label =""
+                                            )
+                                     )
                                    ),
+                                   
+                                   
                                    # Model Builder - Geology Blocks ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                                   fileInput('geology_blocks',
-                                             msgactionBttn(infoId="geology_blocks_info",color="primary",c_label="Geology Blocks:"),
-                                             accept = c(
-                                               '.tif',
-                                               ".shp",".dbf",".sbn",".sbx",".shx",".prj"
-                                             ),
-                                             multiple=T
+                                   fluidRow(
+                                     column(width = 7,
+                                            fileInput('geology_blocks',
+                                                      msgactionBttn(infoId="geology_blocks_info",color="primary",c_label="Geology Blocks:"),
+                                                      accept = c(
+                                                        '.tif',
+                                                        ".shp",".dbf",".sbn",".sbx",".shx",".prj"
+                                                      ),
+                                                      multiple=T
+                                            ),
+                                            
+                                     ),
+                                     column(width = 2,
+                                            actionButton("rst_blocks", # Refresh Button
+                                                         icon = tags$i(class = "fas fa-redo", style="font-size: 20px"),
+                                                         label =""
+                                            )
+                                     )
                                    ),
                                    # Model Builder - Grid Resolution ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                                   numericInput("grid_res", msgactionBttn(infoId="grid_res_info",color="primary",c_label="Grid Resolution [dd]:"),
-                                                min = 0.001, max = 1, value = 0.01,step=0.01),
+                                   numericInput("grid_res", msgactionBttn(infoId="grid_res_info",color="primary",c_label="Grid Resolution [m]:"),
+                                                min = 100, max = 3000, value = 1000,step=500),
                                    # Model Builder - Interpolation Algorithm ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    selectInput("interpolation_algorithm", msgactionBttn(infoId="interpolation_algorithm_info",color="primary",c_label="Interpolation Algorithm:"),
                                                multiple=F,
                                                choices=algorithms_s,
-                                               selected="IDW"),
+                                               selected="Support Vector Machine"),
                                    # Model Builder - Algorithm Parameters ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    uiOutput("algosUI"),
                                    
@@ -624,16 +647,19 @@ ui <- fluidPage(
                             ### Slider Panel for Model Preview & edit--------------------------
                             column(9,offset=0,
                                    shinyjs::useShinyjs(),
-                                   textOutput("geo_messages" ),
-                                   # View type ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                                   shinyWidgets::prettyRadioButtons("geo_dims",label=NULL,
-                                                                    choices = c("2D","3D"),
-                                                                    selected = "2D",
-                                                                    inline =T,
-                                                                    shape ="square",
-                                                                    outline=T,
-                                                                    fill=T,
-                                                                    thick=T),
+                                   fluidRow(
+                                     # View type ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                     shinyWidgets::prettyRadioButtons("geo_dims",label=NULL,
+                                                                      choices = c("2D","3D"),
+                                                                      selected = "2D",
+                                                                      inline =T,
+                                                                      shape ="square",
+                                                                      outline=T,
+                                                                      fill=T,
+                                                                      thick=T),
+                                     # Interpolation Process ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                     textOutput("geo_messages" ),
+                                   )
                                    # plotOutput("clibration_plot",height = "1200px",width = "2140px")
                             )
                           )
@@ -1683,7 +1709,7 @@ server <- function(input, output, session) {
   algorithm_v=reactive({input$interpolation_algorithm})
   output$algosUI=renderUI({
     if(as.character(algorithm_v())=="Kriging"){
-      column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
+      column(width = 9, style = "background-color:#2c3e50; opacity: 0.8;",
              # Model Builder - Kriging model ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
              selectInput("kriging_mdl", msgactionBttn(infoId="kriging_mdl_info",color="primary",c_label="Kriging model:"),
                          multiple=F,
@@ -1697,7 +1723,7 @@ server <- function(input, output, session) {
                           min = 1, max = 10, value = 3,step=1)
       )
     } else if (as.character(algorithm_v())=="Neural Networks") {
-      column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
+      column(width = 9, style = "background-color:#2c3e50; opacity: 0.8;",
              # Model Builder - Neural Networks, range ~~~~~~~~~~~~~~~~~~~~~~~~~~
              numericRangeInput("layers_rng", msgactionBttn(infoId="layers_rng_info",color="primary",c_label="Layers Range:"),
                                min = 0, max = 1000, value =  c(50, 300),step=50),
@@ -1706,7 +1732,7 @@ server <- function(input, output, session) {
                           min = 1, max = 10, value = 4,step=1)
       )
     } else if (as.character(algorithm_v())=="Random Forests") {
-      column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
+      column(width = 9, style = "background-color:#2c3e50; opacity: 0.8;",
              # Model Builder - Random Forests, normalize ~~~~~~~~~~~~~~~~~~~~~~~
              checkboxInput("rf_normalize",  msgactionBttn(infoId="rf_normalize_info",color="primary",c_label="normalize:"),
                            value = FALSE, width = NULL),
@@ -1718,7 +1744,7 @@ server <- function(input, output, session) {
                           min = 10, max = 1000, value = 100,step=10)
       )
     } else if (as.character(algorithm_v())=="Support Vector Machine") {
-      column(width = 12, style = "background-color:#2c3e50; opacity: 0.8;",
+      column(width = 9, style = "background-color:#2c3e50; opacity: 0.8;",
              # Model Builder - Support Vector Machine ,type ~~~~~~~~~~~~~~~~~~~~
              selectInput("svm_typ", msgactionBttn(infoId="svm_typ_info",color="primary",c_label="SVM type:"),
                          multiple=F,
@@ -1736,6 +1762,25 @@ server <- function(input, output, session) {
       
     }
   })
+  
+  ### Check grid resolution to WGS84 ---------------------------------------------
+  
+  observeEvent(input$grid_res,{
+    if (algorithm_v()=="Kriging" & input$grid_res<1000){
+      showModal(
+        modalDialog(
+          title = "Interpolation warning: ",
+          "Warning: The interpolation resolution is too high to use the kriginig method. Please select an alternative method or 
+          chack thet there is cross sections near to the eadges of the unit.",
+          easyClose = T,
+          size="l",
+          footer = NULL
+        )
+      ) 
+    }
+    
+  })
+  
   
   ## Update Tab Elements =======================================================
   observeEvent(input$tabs,{
@@ -1825,7 +1870,7 @@ server <- function(input, output, session) {
   
   
   # Load Unit Boundary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  observeEvent(input$unit_Bounds,{
+   observeEvent(input$unit_Bounds,{
     # Get files
     req(length(input$unit_Bounds)==4) 
     inFile=input$unit_Bounds
@@ -1847,33 +1892,62 @@ server <- function(input, output, session) {
                     label = NULL,
                     fill=F,
                     weight = 6,
-                    fillOpacity =0.2,
-                    smoothFactor = 3,
+                    fillOpacity = 0.2,
+                    smoothFactor = 0,
                     group="geo_bounds")
-      
     } 
   })
+  
+  # Clean load
+   observeEvent(input$rst_Bounds,{
+     unit_bounds_st<<-NULL
+     proxy_geo2d_map=leafletProxy(
+       mapId = "geo2d_map",
+       session = session
+     ) %>%
+       clearGroup(group="geo_bounds")
+     })
+  
   # Load Geology Blocks ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
   observeEvent(input$geology_blocks,{
     # Get files
     req(length(input$geology_blocks)==4) 
     inFile=input$geology_blocks
-    # Set base proxy map
-    # proxy_basemap=leafletProxy(
-    #   mapId = "mainmap",
-    #   session = session
-    # )
+    
     if(any(str_detect(inFile$name,".shp"))) {
       shp_path <- reactive({input$geology_blocks})
-      geology_blocks_st <- Read_Shapefile(shp_path)
-      geology_blocks_st <<- geology_blocks_st() %>% st_transform(.,crs=4326) 
-      # proxy_mainmap=add_element(main_map=proxy_basemap,
-      #                           ad_lyr=geology_blocks_st,
-      #                           type=input$geology_blocks)
+      geology_blocks_exp <- Read_Shapefile(shp_path)
+      geology_blocks_st <<- geology_blocks_exp() %>% st_transform(.,crs=4326) 
+      # Set base proxy map
+      proxy_geo2d_map=leafletProxy(
+        mapId = "geo2d_map",
+        session = session
+      ) %>%
+        clearGroup(group="geo_blocks") %>% 
+        addPolylines(data=geology_blocks_st,
+                    color= "black",
+                    fillColor= "gray",
+                    label = NULL,
+                    fill=F,
+                    weight = 0.5,
+                    fillOpacity =1,
+                    smoothFactor = 3,
+                    group="geo_blocks")
+      
     } 
   })
   
+  # Clean load
+  observeEvent(input$rst_blocks,{
+    unit_bounds_st<<-NULL
+    proxy_geo2d_map=leafletProxy(
+      mapId = "geo2d_map",
+      session = session
+    ) %>%
+      clearGroup(group="geo_blocks")
+  })
+ 
   ### Export Target ------------------------------------------------------------ 
   # Export Model -  Frontend
   expm_rct=reactive({input$expm_v})
@@ -2023,8 +2097,6 @@ server <- function(input, output, session) {
       ap_lst=list(svm_typ=input$svm_typ, kernel=input$kernel,svmc_v=input$svmc_v)
     }
     
-    # Export Target
-    
     ## Oprate Model ------------------------------------------------------------
     withProgress(message = 'Geology Model building in progress',
                  detail = 'This may take few minth', value = 0, min=0,max=360,
@@ -2037,7 +2109,7 @@ server <- function(input, output, session) {
                        notincluded=input$notincluded,
                        surface_unit_st=surface_unit_st,
                        country=input$country,
-                       grid_reso=input$grid_res,
+                       grid_reso=0.00001*input$grid_res, # Convert resolution to dd
                        obs_points_u=obs_points_i,
                        unit_bounds_st=unit_bounds_st,
                        geology_blocks_st=geology_blocks_st,
@@ -2051,7 +2123,7 @@ server <- function(input, output, session) {
                    )
                    tictoc::toc() 
                  })
-    ## Set outpost -------------------------------------------------------------
+    ### Set outpost ------------------------------------------------------------
     geomdl<<-list()
     
     # Raster 
@@ -2071,7 +2143,22 @@ server <- function(input, output, session) {
     
     assign("geomdl",geomdl,envir = .GlobalEnv)
     
-    aa=1    
+    ### Update 2D map ----------------------------------------------------------
+    
+    obs_points4map = left_join(obs_points_u,subset(Geology_Description_ss,,c("well_id","name","Longitude","Latitude")))
+    horizons_db4map  = dplyr::filter(horizons_db_i,ID %notin% input$notincluded) 
+    
+    proxy_geo2d_map=leafletProxy(
+      mapId = "geo2d_map",
+      session = session
+    )
+    
+    proxy_geo2d_map=updt_geo2d_map(geo2d_map=proxy_geo2d_map,
+                                   horizons_db_i=horizons_db4map,
+                                   geomdl,
+                                   obs_points = obs_points4map,
+                                   horizon_unit=input$horizon_unit)
+    
   }) # End of Geology model
   
 } # End of Server --------------------------------------------------------------
