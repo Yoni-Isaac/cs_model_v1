@@ -213,8 +213,60 @@ add_element=function(main_map,ad_lyr,type){
   return(add_map)
  } 
 
+# 4. 2D Geo Model ==============================================================
 
-
+updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit){
+  
+  edited_palette=c("#aeafb0","#a2cffc","#95b9de","#467bb3","#1adb9b","#1EDC66","#1EDC21","#0FA411",
+                   "#ACE409","#DDE409","#F5C907","#F59B07","#F56507","#DC5C47","#D82D12",
+                   "#D81254","#174182","#23539e","#722261","#260C21","#260C21","#260C21","#260C21",
+                   "#260C21","#260C21","#260C21","#260C21")
+  
+  cs_pal <- colorNumeric(edited_palette, horizons_db_i$Elevation,na.color = "transparent")
+  
+  
+  # Set base proxy map
+  proxy_geo2d_map= geo2d_map %>% 
+    clearGroup(group="geomodel") %>% 
+    addPolylines(data=geomdl$cont,
+                 fill = FALSE,
+                 color="white",
+                 weight = 1,
+                 opacity = 0.9,
+                 smoothFactor = 0,
+                 group="geomodel") %>%
+    addCircleMarkers(
+      data=horizons_db_i,
+      label =~paste0("Id=",as.character(ID)," ;x=",as.character(Distance)," ;z=",as.character(round(Elevation,0))),
+      fillOpacity = 0.7,
+      color = ~cs_pal(Elevation),
+      stroke = FALSE,
+      radius =1.5,
+      group="geomodel"
+    ) %>%
+    addRasterImage(geomdl$rst,
+                   color = cs_pal,
+                   opacity = 0.2,
+                   group="geomodel") %>%
+    leaflet::addLegend(pal = cs_pal, values = horizons_db_i$Elevation,position ="topright",
+                       title = paste0(horizon_unit," [m amsl]"))
+  
+  if(is.null(obs_points)==T){
+    #obs_points_st=st_as_sf(as_tibble(obs_pnt_df_grp), coords = c("lon", "lat"), crs = 4326,remove=F)
+    proxy_geo2d_map = proxy_geo2d_map %>% 
+      addCircleMarkers(
+        label =~paste0("name=",as.character(name)," ;z=",as.character(round(elv,0))),
+        data=obs_points, 
+        #lat=~lat,lng=~lon,
+        fillOpacity = 1,
+        color = ~cs_pal(elv),
+        stroke = FALSE,
+        radius =6,
+        group="geomodel"
+      )
+  }
+  return(proxy_geo2d_map)
+}
 
 
 
