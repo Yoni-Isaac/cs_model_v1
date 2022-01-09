@@ -624,6 +624,24 @@ ui <- fluidPage(
                                             )
                                      )
                                    ),
+                                   # Model Builder - Geology Blocks ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   fluidRow(
+                                     column(width = 7,
+                                            fileInput('upper_layer',
+                                                      msgactionBttn(infoId="upper_layer_info",color="primary",c_label="Upper Layer:"),
+                                                      accept = c(
+                                                        '.tif'),
+                                                      multiple=T
+                                            ),
+                                            
+                                     ),
+                                     column(width = 2,
+                                            actionButton("rst_upper", # Refresh Button
+                                                         icon = tags$i(class = "fas fa-redo", style="font-size: 20px"),
+                                                         label =""
+                                            )
+                                     )
+                                   ),
                                    # Model Builder - Grid Resolution ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    numericInput("grid_res", msgactionBttn(infoId="grid_res_info",color="primary",c_label="Grid Resolution [m]:"),
                                                 min = 100, max = 3000, value = 1000,step=500),
@@ -1868,8 +1886,8 @@ server <- function(input, output, session) {
     
   })
   
-  
-  # Load Unit Boundary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ## Load External layers ======================================================
+  ### Load Unit Boundary -------------------------------------------------------
    observeEvent(input$unit_Bounds,{
     # Get files
     req(length(input$unit_Bounds)==4) 
@@ -1908,8 +1926,7 @@ server <- function(input, output, session) {
        clearGroup(group="geo_bounds")
      })
   
-  # Load Geology Blocks ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  
+  ### Load Geology Blocks ------------------------------------------------------
   observeEvent(input$geology_blocks,{
     # Get files
     req(length(input$geology_blocks)==4) 
@@ -1919,7 +1936,7 @@ server <- function(input, output, session) {
       shp_path <- reactive({input$geology_blocks})
       geology_blocks_exp <- Read_Shapefile(shp_path)
       geology_blocks_st <<- geology_blocks_exp() %>% st_transform(.,crs=4326) 
-      # Set base proxy map
+      # Update base proxy map
       proxy_geo2d_map=leafletProxy(
         mapId = "geo2d_map",
         session = session
@@ -1947,8 +1964,44 @@ server <- function(input, output, session) {
     ) %>%
       clearGroup(group="geo_blocks")
   })
- 
-  ### Export Target ------------------------------------------------------------ 
+  
+  ### Load Upper Layer ---------------------------------------------------------
+  observeEvent(input$upper_layer,{
+    # Get files
+    req(length(input$upper_layer)==4 | length(input$upper_layer)==1) 
+    inFile=input$upper_layer
+    
+    if(inFile$type=="image/tiff") {
+      upper_rst=raster(inFile$datapath)
+      if(as.character(crs(upper_rst))!="+proj=longlat +datum=WGS84 +no_defs"){
+        upper_rst=projectRaster(upper_rst, crs = 4326)
+      }
+      names(upper_rst)="upper_rst"
+      upper_rst<<-upper_rst
+      # Update base proxy map
+      proxy_geo2d_map=leafletProxy(
+        mapId = "geo2d_map",
+        session = session
+      ) %>%
+        clearGroup(group="geo_upper") %>% 
+        addRasterImage(upper_rst,
+                       opacity = 0.5,
+                       group="geo_upper")
+        
+      
+    } 
+  })
+  
+  # Clean load
+  observeEvent(input$rst_upper,{
+    unit_bounds_st<<-NULL
+    proxy_geo2d_map=leafletProxy(
+      mapId = "geo2d_map",
+      session = session
+    ) %>%
+      clearGroup(group="geo_upper")
+  })
+  ## Set Export Target =========================================================
   # Export Model -  Frontend
   expm_rct=reactive({input$expm_v})
   output$expmUI=renderUI({
