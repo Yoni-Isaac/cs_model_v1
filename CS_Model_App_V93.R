@@ -1978,23 +1978,29 @@ server <- function(input, output, session) {
       }
       names(upper_rst)="upper_rst"
       upper_rst<<-upper_rst
+      upper_mat=raster_to_matrix(upper_rst)
       # Update base proxy map
+      up_pal <- colorNumeric("Blues", upper_mat, na.color = "transparent")
       proxy_geo2d_map=leafletProxy(
         mapId = "geo2d_map",
         session = session
       ) %>%
         clearGroup(group="geo_upper") %>% 
         addRasterImage(upper_rst,
-                       opacity = 0.5,
-                       group="geo_upper")
-        
-      
-    } 
+                       color = up_pal,
+                       opacity = 0.8,
+                       group="geo_upper") %>%
+        leaflet::addLegend(pal = up_pal,
+                           values = upper_mat,
+                           title = "Upper Layer [m amsl]",
+                           position = "topright",
+                           group="geo_upper")
+     } 
   })
   
   # Clean load
   observeEvent(input$rst_upper,{
-    unit_bounds_st<<-NULL
+    upper_rst<<-NULL
     proxy_geo2d_map=leafletProxy(
       mapId = "geo2d_map",
       session = session
