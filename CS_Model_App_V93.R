@@ -146,6 +146,7 @@ tab_tbl=NULL
 horizons_db=NULL
 segment_id=0
 lines_db<<-NULL
+cs_tagging=NULL
 dlt_optn="active"
 initial_view="inactive"
 
@@ -156,6 +157,7 @@ geology_blocks_st=NULL
 gmgrid_pnt=NULL
 geology_map_act=NULL
 upper_rst=NULL
+geomdl=NULL
 #Geology_Description_ss=NULL
 
 # Additional Layers
@@ -669,7 +671,7 @@ ui <- fluidPage(
                                    fluidRow(
                                      # View type ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                      shinyWidgets::prettyRadioButtons("geo_dims",label=NULL,
-                                                                      choices = c("2D","3D"),
+                                                                      choices = c("2D","3D", "Edit"),
                                                                       selected = "2D",
                                                                       inline =T,
                                                                       shape ="square",
@@ -1861,35 +1863,38 @@ server <- function(input, output, session) {
     
     ## Set & Switch View =======================================================
     # Set base 2D map
-    output$geo2d_map <- renderLeaflet({
-      leaflet(options = leafletOptions(zoomControl = F)) %>% 
-        setView(lng=35.2,lat=32.55,zoom=10) %>%
-        addProviderTiles(providers$CartoDB.Positron) %>%
-        htmlwidgets::onRender("
+    if(is.null(c(geomdl,upper_rst, unit_bounds_st))==T){
+      output$geo2d_map <- renderLeaflet({
+        leaflet(options = leafletOptions(zoomControl = F)) %>% 
+          setView(lng=35.2,lat=32.55,zoom=10) %>%
+          addProviderTiles(providers$CartoDB.Positron) %>%
+          htmlwidgets::onRender("
                 function(el,x) {
                     geo2d_map = this;
                 }
             ")  %>%
-        htmlwidgets::onRender("function(el, x) {
+          htmlwidgets::onRender("function(el, x) {
                  L.control.zoom({ position: 'bottomright' }).addTo(this)}")
+        
+      })
       
-    })
-    
-    geo_dims_v=reactive({input$geo_dims})
-    output$geo_view=renderUI({
-      #req()
-      if(as.character(geo_dims_v())=="2D"){
-        leafletOutput("geo2d_map",height = "1950px",width = "2400px")
-      } else if (as.character(geo_dims_v())=="3D") {
-        # All your dreams....
-      }
-    })
+      geo_dims_v=reactive({input$geo_dims})
+      output$geo_view=renderUI({
+        #req()
+        if(as.character(geo_dims_v())=="2D"){
+          leafletOutput("geo2d_map",height = "1950px",width = "2400px")
+        } else if (as.character(geo_dims_v())=="3D") {
+          # All your dreams....
+        }
+      })
+      
+    }
     
   })
   
   ## Load External layers ======================================================
   ### Load Unit Boundary -------------------------------------------------------
-   observeEvent(input$unit_Bounds,{
+  observeEvent(input$unit_Bounds,{
     # Get files
     req(length(input$unit_Bounds)==4) 
     inFile=input$unit_Bounds
@@ -1918,14 +1923,14 @@ server <- function(input, output, session) {
   })
   
   # Clean load
-   observeEvent(input$rst_Bounds,{
-     unit_bounds_st<<-NULL
-     proxy_geo2d_map=leafletProxy(
-       mapId = "geo2d_map",
-       session = session
-     ) %>%
-       clearGroup(group="geo_bounds")
-     })
+  observeEvent(input$rst_Bounds,{
+    unit_bounds_st<<-NULL
+    proxy_geo2d_map=leafletProxy(
+      mapId = "geo2d_map",
+      session = session
+    ) %>%
+      clearGroup(group="geo_bounds")
+  })
   
   ### Load Geology Blocks ------------------------------------------------------
   observeEvent(input$geology_blocks,{
@@ -1944,14 +1949,14 @@ server <- function(input, output, session) {
       ) %>%
         clearGroup(group="geo_blocks") %>% 
         addPolylines(data=geology_blocks_st,
-                    color= "black",
-                    fillColor= "gray",
-                    label = NULL,
-                    fill=F,
-                    weight = 0.5,
-                    fillOpacity =1,
-                    smoothFactor = 3,
-                    group="geo_blocks")
+                     color= "black",
+                     fillColor= "gray",
+                     label = NULL,
+                     fill=F,
+                     weight = 0.5,
+                     fillOpacity =1,
+                     smoothFactor = 3,
+                     group="geo_blocks")
       
     } 
   })
@@ -1999,7 +2004,7 @@ server <- function(input, output, session) {
                            title = "Upper Layer [m amsl]",
                            position = "topright",
                            group="geo_upper")
-     } 
+    } 
   })
   
   # Clean load
@@ -2222,18 +2227,18 @@ server <- function(input, output, session) {
     ### Update 2D map ----------------------------------------------------------
     output$geo2d_map <- renderLeaflet({
       leaflet(options = leafletOptions(zoomControl = F)) %>% 
-      setView(lng=35.2,lat=32.55,zoom=10) %>%
-      addProviderTiles(providers$CartoDB.Positron) %>%
-      htmlwidgets::onRender("
+        setView(lng=35.2,lat=32.55,zoom=10) %>%
+        addProviderTiles(providers$CartoDB.Positron) %>%
+        htmlwidgets::onRender("
                 function(el,x) {
                     geo2d_map = this;
                 }
             ")  %>%
-      htmlwidgets::onRender("function(el, x) {
+        htmlwidgets::onRender("function(el, x) {
                  L.control.zoom({ position: 'bottomright' }).addTo(this)}")
       
     })
-
+    
     
     obs_points4map = left_join(obs_points_u,subset(Geology_Description_ss,,c("well_id","name","Longitude","Latitude")))
     horizons_db4map  = dplyr::filter(horizons_db_i,ID %notin% input$notincluded) 
@@ -2244,47 +2249,50 @@ server <- function(input, output, session) {
     )
     
     if (!is.null(geomdl$above_rst)==T){
-      if (minValue(geomdl$above_rst)<0){
-        pa_rng = seq(minValue(above_rst),0, length.out=5)
-        pb_rng = seq(1,maxValue(above_rst), length.out=5)
-        ab_rng = c(pa_rng,pb_rng)
-        ab_pal = pb_pal = colorNumeric("RdBu",ab_rng, na.color = "transparent")
-      } else{
-        ab_rng = seq(minValue(above_rst),maxValue(above_rst), length.out=10)
-        ab_pal = colorNumeric("Blues", ab_rng, na.color = "transparent")
-      }
+      proxy_geo2d_map=extra4geo2d(geo2d_map=proxy_geo2d_map,
+                                  horizons_db_i=horizons_db4map,
+                                  geomdl,
+                                  obs_points = obs_points4map,
+                                  horizon_unit=input$horizon_unit) 
+    } else {
       proxy_geo2d_map=updt_geo2d_map(geo2d_map=proxy_geo2d_map,
                                      horizons_db_i=horizons_db4map,
                                      geomdl,
                                      obs_points = obs_points4map,
-                                     horizon_unit=input$horizon_unit)  %>%
-        clearGroup(group="geo_upper") %>% 
-        addRasterImage(geomdl$above_rst,
-                       color = ab_pal,
-                       opacity = 0.8,
-                       group="geo_upper") %>%
-        addPolylines(data=geomdl$zero_cont,
-                     fill = FALSE,
-                     color="red",
-                     weight = 2,
-                     opacity = 0.9,
-                     smoothFactor = 0) %>% 
-        leaflet::addLegend(pal = ab_pal,
-                           values = ab_rng,
-                           title = "Upper Layer [m amsl]",
-                           position = "topright",
-                           group="geo_upper") %>% 
-        addLayersControl(position = "topright", overlayGroups = c("geo_upper"))
-    } else {
-          proxy_geo2d_map=updt_geo2d_map(geo2d_map=proxy_geo2d_map,
-                                   horizons_db_i=horizons_db4map,
-                                   geomdl,
-                                   obs_points = obs_points4map,
-                                   horizon_unit=input$horizon_unit)
+                                     horizon_unit=input$horizon_unit)
     }
-
+      
     
-  }) # End of Geology model
+  })
+  
+  ## Edit Geology model ========================================================
+  observeEvent(input$geo_dims,{
+    req(!is.null(geomdl)==T)
+    req(!is.null(horizons_db)==T)
+    #req(!is.null(proxy_geo2d_map)==T)
+    if (as.character(input$geo_dims)=="Edit"){
+      proxy_geo2d_map=leafletProxy(
+        mapId = "geo2d_map",
+        session = session
+      )
+      proxy_geo2d_map = geo2d_map %>% 
+        addPmToolbar(
+          toolbarOptions = pmToolbarOptions(drawMarker = T, position = "topleft"),
+          drawOptions = pmDrawOptions(snappable = T,
+                                      allowSelfIntersection = T,
+                                      snapDistance = 5,
+                                      tooltips = T, cursorMarker = T,
+                                      finishOn =  'dblclick',
+                                      hintlineStyle = list(color = "#3388ff", dashArray = "5,5"),
+                                      templineStyle = list(color = "#ff0000")
+          ),
+          editOptions = pmEditOptions(preventMarkerRemoval = TRUE, draggable = FALSE),
+          cutOptions = pmCutOptions(snappable = FALSE, allowSelfIntersection = FALSE))  
+      
+    }
+  })
+  
+  # End of Geology model
   
 } # End of Server --------------------------------------------------------------
 
