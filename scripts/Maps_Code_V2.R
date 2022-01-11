@@ -213,8 +213,8 @@ add_element=function(main_map,ad_lyr,type){
   return(add_map)
  } 
 
-# 4. 2D Geo Model ==============================================================
-
+# 4. 2D Geo Model ##############################################################
+## 4.1 Simple 2D Geo map =======================================================  
 updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit){
   
   edited_palette=c("#aeafb0","#a2cffc","#95b9de","#467bb3","#1adb9b","#1EDC66","#1EDC21","#0FA411",
@@ -226,7 +226,7 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
   
   
   # Set base proxy map
-  proxy_geo2d_map= geo2d_map %>% 
+  proxy_geo2d_map = geo2d_map %>% 
     clearGroup(group="geomodel") %>% 
     addPolylines(data=geomdl$cont,
                  fill = FALSE,
@@ -237,16 +237,31 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
                  group="geomodel") %>%
     addCircleMarkers(
       data=horizons_db_i,
-      label =~paste0("Id=",as.character(ID)," ;x=",as.character(Distance)," ;z=",as.character(round(Elevation,0))),
+      label =~paste0("Id=",as.character(ID)," ;x=",as.character(round(Distance,0))," ;z=",as.character(round(Elevation,0))),
+      labelOptions=labelOptions(style = list(
+        "color" = "blue",
+        "font-family" = "serif",
+        "font-style" = "italic",
+        "box-shadow" = "3px 3px rgba(0,0,0,0.25)",
+        "font-size" = "15px",
+        "border-color" = "rgba(0,0,0,0.5)"
+      ),
+                                maxWidth = 3000,
+                                maxHeight = 3000,
+                                zIndexOffset=Inf),
       fillOpacity = 0.7,
       color = ~cs_pal(Elevation),
       stroke = FALSE,
-      radius =1.5,
+      radius =3,
       group="geomodel"
     ) %>%
     addCircleMarkers(
       data=obs_points,
       label =~as.character(name),
+      labelOptions=labelOptions(textsize = "30px",
+                                maxWidth = 3000,
+                                maxHeight = 3000,
+                                zIndexOffset=Inf),
       fillOpacity = 1,
       color = "balck",
       stroke = FALSE,
@@ -278,8 +293,45 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
   return(proxy_geo2d_map)
 }
 
+## 4.2 Extra layers 4 Geo map ==================================================
 
-
+extra4geo2d = function(geo2d_map, horizons_db_i,geomdl,obs_points,horizon_unit){
+  above_rst=geomdl$above_rst
+  if (minValue(above_rst)<0){
+    pa_rng = seq(minValue(above_rst),0, length.out=5)
+    pb_rng = seq(1,maxValue(above_rst), length.out=5)
+    ab_rng = c(pa_rng,pb_rng)
+    ab_pal = pb_pal = colorNumeric("RdBu",ab_rng, na.color = "transparent")
+  } else{
+    ab_rng = seq(minValue(above_rst),maxValue(above_rst), length.out=10)
+    ab_pal = colorNumeric("Blues", ab_rng, na.color = "transparent")
+  }
+  proxy_geo2d_map=updt_geo2d_map(geo2d_map,
+                                 horizons_db_i,
+                                 geomdl,
+                                 obs_points,
+                                 horizon_unit)  %>%
+    clearGroup(group="geo_upper") %>% 
+    addRasterImage(above_rst,
+                   color = ab_pal,
+                   opacity = 0.8,
+                   group="geo_upper") %>%
+    addPolylines(data=geomdl$zero_cont,
+                 fill = FALSE,
+                 label = ~level,
+                 labelOptions=labelOptions(style = list("color" = "red")),
+                 color="red",
+                 weight = 2,
+                 opacity = 0.9,
+                 smoothFactor = 0) %>% 
+    leaflet::addLegend(pal = ab_pal,
+                       values = ab_rng,
+                       title = "Upper Layer [m amsl]",
+                       position = "topright",
+                       group="geo_upper") %>% 
+    addLayersControl(position = "topright", overlayGroups = c("geo_upper"))
+return(proxy_geo2d_map)  
+}
 
 
 
