@@ -24,43 +24,43 @@ if(Type_of_runing=="u_t"){
   notincluded="GG'"
   surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp")
   country="Israel"
-  grid_reso=0.001
+  grid_reso=0.00001*1000 # Convert resolution to dd
   obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv")
   unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326) 
   geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326)
   #
-  algorithm_s="Kriging"
-  ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3)
+  # algorithm_s="Kriging"
+  # ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3)
   # algorithm_s="Random Forests",
   # ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
   # algorithm_s="Neural Networks",
   # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
-  # algorithm_s="Support Vector Machine",
-  # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
+  algorithm_s="Support Vector Machine"
+  ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
   
-  geomodel_lst=line2horizon (
+  geomodel=line2horizon (
     horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/horizons_db_i.csv"),
     notincluded="GG'",
     surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp"),
     country="Israel",
-    grid_reso=0.001,
+    grid_reso=0.00001*1000, # Convert resolution to dd,
     obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv"),
     unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326) ,
     geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326) ,
     #
-    algorithm_s="Kriging",
-    ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3),
+    # algorithm_s="Kriging",
+    # ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3),
     # algorithm_s="Random Forests",
     # ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
     # algorithm_s="Neural Networks",
     # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
-    # algorithm_s="Support Vector Machine",
-    # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
+    algorithm_s="Support Vector Machine",
+    ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
   )
   tictoc::toc()
   
   # Check raster
-  plot(geomodel_lst$int_rst)
+  plot(geomodel_rst)
   plot(subset(geomodel_lst$int_pnt,,c(int_z)))
   write.csv(st_drop_geometry(geomodel_lst$int_pnt),"G:/Geohydrology/RB/eaocen_base_svm.csv")
 }
@@ -309,10 +309,14 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
     }
     
   }
-  # 6. Export Elements #########################################################
-  message("6. Export Elements")
+  # 6.Post Processing ##########################################################
+  ss <- raster(resolution=c(grid_reso*0.1,grid_reso*0.1), crs=proj4string(int), ext=extent(int)) 
+  int4export <- resample(int, ss)
+
+  # 7. Export Elements #########################################################
+  message("7. Export Elements")
   message("Geology Model was Successfully Completed")
-  return(int)
+  return(int4export)
 }
 # Sub Functions ################################################################
 # Build normalize functions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

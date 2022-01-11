@@ -244,12 +244,22 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
       radius =1.5,
       group="geomodel"
     ) %>%
+    addCircleMarkers(
+      data=obs_points,
+      label =~as.character(name),
+      fillOpacity = 1,
+      color = "balck",
+      stroke = FALSE,
+      radius =3,
+      group="geomodel"
+    ) %>% 
     addRasterImage(geomdl$rst,
                    color = cs_pal,
                    opacity = 0.2,
                    group="geomodel") %>%
     leaflet::addLegend(pal = cs_pal, values = horizons_db_i$Elevation,position ="topright",
-                       title = paste0(horizon_unit," [m amsl]"))
+                       title = paste0(horizon_unit," [m amsl]"),
+                       group="geomodel")
   
   if(is.null(obs_points)==T){
     #obs_points_st=st_as_sf(as_tibble(obs_pnt_df_grp), coords = c("lon", "lat"), crs = 4326,remove=F)
@@ -267,9 +277,6 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
   }
   return(proxy_geo2d_map)
 }
-
-
-
 
 
 
