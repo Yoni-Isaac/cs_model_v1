@@ -155,6 +155,7 @@ unit_bounds_st=NULL
 geology_blocks_st=NULL
 gmgrid_pnt=NULL
 geology_map_act=NULL
+upper_rst=NULL
 #Geology_Description_ss=NULL
 
 # Additional Layers
@@ -1878,7 +1879,7 @@ server <- function(input, output, session) {
     output$geo_view=renderUI({
       #req()
       if(as.character(geo_dims_v())=="2D"){
-        leafletOutput("geo2d_map",height = "1950px",width = "3400px")
+        leafletOutput("geo2d_map",height = "1950px",width = "2400px")
       } else if (as.character(geo_dims_v())=="3D") {
         # All your dreams....
       }
@@ -1978,9 +1979,12 @@ server <- function(input, output, session) {
       }
       names(upper_rst)="upper_rst"
       upper_rst<<-upper_rst
-      upper_mat=raster_to_matrix(upper_rst)
+      
+      # Set Ranges
+      up_rng = seq(minValue(upper_rst),maxValue(upper_rst), length.out=10)
+      up_pal = colorNumeric("Blues", up_rng, na.color = "transparent")
       # Update base proxy map
-      up_pal <- colorNumeric("Blues", upper_mat, na.color = "transparent")
+      
       proxy_geo2d_map=leafletProxy(
         mapId = "geo2d_map",
         session = session
@@ -1991,7 +1995,7 @@ server <- function(input, output, session) {
                        opacity = 0.8,
                        group="geo_upper") %>%
         leaflet::addLegend(pal = up_pal,
-                           values = upper_mat,
+                           values = up_rng,
                            title = "Upper Layer [m amsl]",
                            position = "topright",
                            group="geo_upper")
@@ -2200,9 +2204,36 @@ server <- function(input, output, session) {
       geomdl$xyz = gmgrid_pnt %>%  mutate(int_z=raster::extract(geomodel,.)) 
     }
     
+    # #Upper layer
+    if(!is.null(upper_rst)==T){
+      upper_rs=raster::resample(upper_rst,geomodel)
+      above_rst=upper_rs-geomodel
+      geomdl$above_rst = above_rst
+      
+      above_cont=st_as_sf(rasterToContour(above_rst,nlevels = 100)) %>% 
+        dplyr::filter(level<0) %>% 
+        dplyr::arrange(level)
+      geomdl$zero_cont = above_cont[1,]
+    }
+    
+    
     assign("geomdl",geomdl,envir = .GlobalEnv)
     
     ### Update 2D map ----------------------------------------------------------
+    output$geo2d_map <- renderLeaflet({
+      leaflet(options = leafletOptions(zoomControl = F)) %>% 
+      setView(lng=35.2,lat=32.55,zoom=10) %>%
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      htmlwidgets::onRender("
+                function(el,x) {
+                    geo2d_map = this;
+                }
+            ")  %>%
+      htmlwidgets::onRender("function(el, x) {
+                 L.control.zoom({ position: 'bottomright' }).addTo(this)}")
+      
+    })
+
     
     obs_points4map = left_join(obs_points_u,subset(Geology_Description_ss,,c("well_id","name","Longitude","Latitude")))
     horizons_db4map  = dplyr::filter(horizons_db_i,ID %notin% input$notincluded) 
@@ -2212,11 +2243,46 @@ server <- function(input, output, session) {
       session = session
     )
     
-    proxy_geo2d_map=updt_geo2d_map(geo2d_map=proxy_geo2d_map,
+    if (!is.null(geomdl$above_rst)==T){
+      if (minValue(geomdl$above_rst)<0){
+        pa_rng = seq(minValue(above_rst),0, length.out=5)
+        pb_rng = seq(1,maxValue(above_rst), length.out=5)
+        ab_rng = c(pa_rng,pb_rng)
+        ab_pal = pb_pal = colorNumeric("RdBu",ab_rng, na.color = "transparent")
+      } else{
+        ab_rng = seq(minValue(above_rst),maxValue(above_rst), length.out=10)
+        ab_pal = colorNumeric("Blues", ab_rng, na.color = "transparent")
+      }
+      proxy_geo2d_map=updt_geo2d_map(geo2d_map=proxy_geo2d_map,
+                                     horizons_db_i=horizons_db4map,
+                                     geomdl,
+                                     obs_points = obs_points4map,
+                                     horizon_unit=input$horizon_unit)  %>%
+        clearGroup(group="geo_upper") %>% 
+        addRasterImage(geomdl$above_rst,
+                       color = ab_pal,
+                       opacity = 0.8,
+                       group="geo_upper") %>%
+        addPolylines(data=geomdl$zero_cont,
+                     fill = FALSE,
+                     color="red",
+                     weight = 2,
+                     opacity = 0.9,
+                     smoothFactor = 0) %>% 
+        leaflet::addLegend(pal = ab_pal,
+                           values = ab_rng,
+                           title = "Upper Layer [m amsl]",
+                           position = "topright",
+                           group="geo_upper") %>% 
+        addLayersControl(position = "topright", overlayGroups = c("geo_upper"))
+    } else {
+          proxy_geo2d_map=updt_geo2d_map(geo2d_map=proxy_geo2d_map,
                                    horizons_db_i=horizons_db4map,
                                    geomdl,
                                    obs_points = obs_points4map,
                                    horizon_unit=input$horizon_unit)
+    }
+
     
   }) # End of Geology model
   
