@@ -56,7 +56,7 @@ cs_model=function(in_param)
     DEM_line_thickness=0.2
     Save_as_PowerPoint=paste0(Background_path,'/CS_Model_V01/Products/hydrology_cs.pptx')
     Use_tamplate =F
-    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_COS.csv'))$V1) ;str_i=1 #NULL #
+    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_NES.csv'))$V1) ;str_i=1 #NULL #
     geological_cs_surf="geomap"# geomap # "geomap_free_colors" # "blind"
     country="Israel" # "Indefinite"
     geology_200=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_200_V4.shp"))
@@ -969,7 +969,7 @@ cs_model=function(in_param)
               aes(x = dst,y=top+0.3*space,label =round(top,0)), colour ="black",size =0.05*ls,alpha=0.9)+ # top
     ggrepel::geom_text_repel(data = CS_model_system_unit_dst,
                              aes(x = dst,y=bot-0.1*space,label =paste0("TD=",round(bot,0))),
-                             colour = "black", fill = alpha(c("white"),0.7),size = 0.05*ls,alpha=1,
+                             colour = "black",size = 0.05*ls,alpha=1, # , fill = alpha(c("white"),0.7)
                              max.overlaps = 100) + # bot
     ggrepel::geom_text_repel(data = CS_model_system_unit_dst,
                              aes(x = dst,y=top+0.8*space,label =name), colour ="black",angle = 45,size =0.1*ls,alpha=0.9,max.overlaps = 20) + # name

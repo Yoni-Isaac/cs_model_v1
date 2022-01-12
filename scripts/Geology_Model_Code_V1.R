@@ -20,8 +20,8 @@ library(kernlab)   # Support Vector Machine
 # # Unit = Top Senon
 if(Type_of_runing=="u_t"){
   tictoc::tic()
-  horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/horizons_db_i.csv")
-  notincluded="GG'"
+  horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/Fixed_CS-A2Z_V2.csv")
+  notincluded=NULL#"GG'"
   surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp")
   country="Israel"
   grid_reso=0.00001*1000 # Convert resolution to dd
@@ -37,10 +37,12 @@ if(Type_of_runing=="u_t"){
   # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
   algorithm_s="Support Vector Machine"
   ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
+  upper_layer=raster("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/DTM_EstMt_smooth.tif")
+  rst_cutter=T
   
   geomodel=line2horizon (
-    horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/horizons_db_i.csv"),
-    notincluded="GG'",
+    horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/Fixed_CS-A2Z_V2.csv"),
+    notincluded=NULL,#"GG'"
     surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp"),
     country="Israel",
     grid_reso=0.00001*1000, # Convert resolution to dd,
@@ -55,7 +57,9 @@ if(Type_of_runing=="u_t"){
     # algorithm_s="Neural Networks",
     # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
     algorithm_s="Support Vector Machine",
-    ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
+    ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
+    upper_layer,
+    rst_cutter=T
   )
   tictoc::toc()
   
@@ -67,7 +71,9 @@ if(Type_of_runing=="u_t"){
 
 # FUNC ################
 line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
-                      country,grid_reso,obs_points_u,unit_bounds_st,geology_blocks_st,algorithm_s,ap_lst){
+                      country,grid_reso,obs_points_u,unit_bounds_st,
+                      geology_blocks_st,algorithm_s,ap_lst,
+                      upper_layer,rst_cutter){
   
   # 1. Get Core DB #############################################################
   message("1. Get Core DB")
@@ -312,6 +318,13 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   # 6.Post Processing ##########################################################
   ss <- raster(resolution=c(grid_reso*0.1,grid_reso*0.1), crs=proj4string(int), ext=extent(int)) 
   int4export <- resample(int, ss)
+  
+  if(rst_cutter==T & !is.null(upper_layer)==T){
+    upper_layer_rs <- resample(upper_layer, int4export)
+    s <- stack(int4export, upper_layer_rs)
+    rc <- function(int4export,upper_layer_rs) {ifelse(int4export>=upper_layer_rs,upper_layer_rs,int4export)} 
+    int4export <- overlay(s, fun=rc)
+  }
 
   # 7. Export Elements #########################################################
   message("7. Export Elements")
