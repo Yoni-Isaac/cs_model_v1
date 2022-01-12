@@ -253,7 +253,7 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
       color = ~cs_pal(Elevation),
       stroke = FALSE,
       radius =3,
-      group="geomodel"
+      group="cs_pnts"
     ) %>%
     addCircleMarkers(
       data=obs_points,
@@ -323,7 +323,8 @@ extra4geo2d = function(geo2d_map, horizons_db_i,geomdl,obs_points,horizon_unit){
                  color="red",
                  weight = 2,
                  opacity = 0.9,
-                 smoothFactor = 0) %>% 
+                 smoothFactor = 0,
+                 group="geo_upper") %>%
     leaflet::addLegend(pal = ab_pal,
                        values = ab_rng,
                        title = "Upper Layer [m amsl]",
