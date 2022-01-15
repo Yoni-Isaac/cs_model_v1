@@ -582,10 +582,21 @@ ui <- fluidPage(
                                                multiple=T,
                                                choices=NULL),
                                    # Model Builder - Observation Points ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                                   selectInput("observation_points", msgactionBttn(infoId="observation_points_info",color="primary",c_label="observation_points:"),
-                                               multiple=T,
-                                               choices=NULL),
-                                   
+                                   fluidRow(
+                                     column(width = 7,
+                                            selectInput("observation_points", msgactionBttn(infoId="observation_points_info",color="primary",c_label="observation_points:"),
+                                                        multiple=T,
+                                                        choices=NULL),
+                                     ),
+                                     column(width = 7,
+                                            selectInput("obs_notincluded", msgactionBttn(infoId="obs_notincluded_info",color="primary",c_label="Not included Obs':"),
+                                                        multiple=T,
+                                                        choices=NULL),
+                                     ),
+                                     column(2,
+                                            checkboxInput("obs_inclod",label =""),
+                                            )
+                                   ),
                                    # Model Builder - Unit Boundary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    fluidRow(
                                      column(width = 7,
@@ -644,7 +655,7 @@ ui <- fluidPage(
                                                          label =""
                                             ),
                                             checkboxInput("rst_cutter",label =""),
-                                    )
+                                     )
                                    ),
                                    # Model Builder - Grid Resolution ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    numericInput("grid_res", msgactionBttn(infoId="grid_res_info",color="primary",c_label="Grid Resolution [m]:"),
@@ -1022,7 +1033,7 @@ server <- function(input, output, session) {
       # use intersect to identify selected items
       #selected_gotiles=raster::intersect(sf::as_Spatial(st_zm(geogrid, drop = TRUE, what = "ZM")),drawn_polygon_sp) # st_intersection(geogrid,st_as_sf(drawn_polygon_sp)) #
       # Check the selection 
-      maxtiles=ifelse(input$geomap=="Regional-Low",81,10)
+      maxtiles=ifelse(input$geomap=="Regional-Low",300,100)
       if(nrow(selected_gotiles)<maxtiles){
         # Define selected tiles
         if(input$geomap == "Regional-Low"){
@@ -1831,7 +1842,7 @@ server <- function(input, output, session) {
                         choices =notincluded_ids$ID
       )
     }
-    # surface Geology
+    ### surface Geology --------------------------------------------------------
     if(!is.null(geology_map_act)==T){
       sf::sf_use_s2(F)
       geology_map_ids=st_drop_geometry(geology_map_act) %>%   dplyr::distinct(Name_Eng,.keep_all = F)
@@ -1843,7 +1854,7 @@ server <- function(input, output, session) {
       )  
     }
     
-    # Observation Points
+    ### Observation Points -----------------------------------------------------
     if(!is.null(Geology_Description_ss)==T){
       
       INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "Index")) %>% 
@@ -1859,8 +1870,27 @@ server <- function(input, output, session) {
                         inputId="observation_points",
                         selected=Geology_Description_trg$f_name[1],
                         choices = Geology_Description_trg$f_name
-      )  
+      )
+      obs_notincluded_c=subset(Geology_Description_ss,,c("name")) %>% dplyr::arrange(name) 
+      updateSelectInput(session,
+                        inputId="obs_notincluded",
+                        selected = NULL,
+                        choices = obs_notincluded_c
+      )
     }
+    
+    observeEvent(input$obs_inclod,{
+      req(input$obs_inclod==T)
+      req(!is.null(Geology_Description_ss)==T)
+      messeges_str="You have chosen to include the points in the interpolation directly and not through the cross-sections.
+      This can cause distortions in the results and a longer duration of the interpolation process."
+      showModal(modalDialog(
+        title = "Data warning: ",
+        messeges_str,
+        easyClose = TRUE,
+        footer = NULL
+      )) 
+    })
     
     ## Set & Switch View =======================================================
     # Set base 2D map
@@ -2140,18 +2170,22 @@ server <- function(input, output, session) {
     }
     
     INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V5.xlsm"),sheet = "Index")) %>% 
+      dplyr::filter(type %in% input$CS_type) %>% 
       dplyr::rename("{input$CS_type}":=f_ID)
     
     obs_points_i <<- Geology_Description_ss %>% 
+      dplyr::filter(name %notin% input$obs_notincluded) %>% 
       subset(.,,c("well_id","Longitude","Latitude","elv","top_layer","bot_layer",input$CS_type)) %>% 
       left_join(.,subset(INDEX,,c(input$CS_type,"f_name"))) %>% 
-      dplyr::filter(f_name %in% input$observation_points)
+      dplyr::filter(f_name %in% input$observation_points) %>% 
+      dplyr::distinct_all(,.keep_all = T)
+     
     
     if(input$horizon_type=="Base"){
-      obs_points_u <<- obs_points_i %>% group_by(well_id,elv) %>% 
+      obs_points_u <<- obs_points_i %>% group_by(well_id,elv,Longitude,Latitude) %>% 
         dplyr::summarise(targ_dpt=max(bot_layer,na.rm = T)) 
     } else{
-      obs_points_u <<- obs_points_i %>% group_by(well_id,elv) %>% 
+      obs_points_u <<- obs_points_i %>% group_by(well_id,elv,Longitude,Latitude) %>% 
         dplyr::summarise(targ_dpt=min(top_layer,na.rm = T)) 
     }
     
@@ -2179,7 +2213,8 @@ server <- function(input, output, session) {
                        surface_unit_st=surface_unit_st,
                        country=input$country,
                        grid_reso=0.00001*input$grid_res, # Convert resolution to dd
-                       obs_points_u=obs_points_i,
+                       obs_points_u=obs_points_u,
+                       obs_inclod=input$obs_inclod,
                        unit_bounds_st=unit_bounds_st,
                        geology_blocks_st=geology_blocks_st,
                        algorithm_s=input$interpolation_algorithm,
@@ -2199,7 +2234,7 @@ server <- function(input, output, session) {
     
     # Raster 
     geomdl$rst=geomodel
-
+    
     # Contour
     if(as.character(expm_rct())=="Contour"){
       geomdl$cont=st_as_sf(rasterToContour(geomodel,nlevels = input$contour_res))
@@ -2254,18 +2289,18 @@ server <- function(input, output, session) {
     
     if (!is.null(geomdl$above_rst)==T){
       proxy_geo2d_map<<-extra4geo2d(geo2d_map=proxy_geo2d_map,
-                                  horizons_db_i=horizons_db4map,
-                                  geomdl,
-                                  obs_points = obs_points4map,
-                                  horizon_unit=input$horizon_unit) 
+                                    horizons_db_i=horizons_db4map,
+                                    geomdl,
+                                    obs_points = obs_points4map,
+                                    horizon_unit=input$horizon_unit) 
     } else {
       proxy_geo2d_map<<-updt_geo2d_map(geo2d_map=proxy_geo2d_map,
-                                     horizons_db_i=horizons_db4map,
-                                     geomdl,
-                                     obs_points = obs_points4map,
-                                     horizon_unit=input$horizon_unit)
+                                       horizons_db_i=horizons_db4map,
+                                       geomdl,
+                                       obs_points = obs_points4map,
+                                       horizon_unit=input$horizon_unit)
     }
-      
+    
     
   })
   
