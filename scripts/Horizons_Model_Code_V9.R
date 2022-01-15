@@ -205,7 +205,7 @@ nodes_linker=function(current_line,lines_db,horizons_db,charts){
     # Get Intersection to CS
     lines_db_i=lines_db[i,]
     juc_pnt_i=st_intersection(current_line,lines_db_i)#  %>% st_cast("POINT") 
-    if(nrow(juc_pnt_i)){
+    if(nrow(juc_pnt_i)>0){
       # Get Elevation data (Extract from DB CS)
       horizons_db_st_i=dplyr::filter(horizons_db_st,cs_id == lines_db_i$cs_id)
       nn_i_horizons=horizons_db_st_i %>% 
@@ -218,7 +218,7 @@ nodes_linker=function(current_line,lines_db,horizons_db,charts){
         juc_i_horizons = nn_i_horizons  %>% 
           unnest(cols = c(data)) %>% 
           group_by(Horizon) %>% 
-          mutate(n=1,n=cumsum(n)) %>% 
+          mutate(n=1,n=cumsum(n),Range=0) %>% 
           dplyr::filter(n==closest_pnt) %>% 
           dplyr::select(.,names(juc_df)) %>% na.omit(.) 
         

@@ -19,13 +19,14 @@ library(kernlab)   # Support Vector Machine
 
 # # Unit = Top Senon
 if(Type_of_runing=="u_t"){
-  tictoc::tic()
+  
   horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/Fixed_CS-A2Z_V2.csv")
   notincluded=NULL#"GG'"
   surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp")
   country="Israel"
   grid_reso=0.00001*1000 # Convert resolution to dd
   obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv")
+  obs_inclod=F
   unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326) 
   geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326)
   #
@@ -40,38 +41,40 @@ if(Type_of_runing=="u_t"){
   upper_layer=raster("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/DTM_EstMt_smooth.tif")
   rst_cutter=T
   
+  
+  tictoc::tic()
   geomodel=line2horizon (
     horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/Fixed_CS-A2Z_V2.csv"),
     notincluded=NULL,#"GG'"
     surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp"),
     country="Israel",
     grid_reso=0.00001*1000, # Convert resolution to dd,
-    obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv"),
+    obs_points_u=NULL,#read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv"),
+    obs_inclod=F,
     unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326) ,
     geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326) ,
     #
     # algorithm_s="Kriging",
     # ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3),
-    # algorithm_s="Random Forests",
-    # ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
+    algorithm_s="Random Forests",
+    ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
     # algorithm_s="Neural Networks",
     # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
-    algorithm_s="Support Vector Machine",
-    ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
+    # algorithm_s="Support Vector Machine",
+    # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
     upper_layer,
-    rst_cutter=T
+    rst_cutter=F
   )
   tictoc::toc()
   
   # Check raster
-  plot(geomodel_rst)
-  plot(subset(geomodel_lst$int_pnt,,c(int_z)))
+  plot(geomodel)
   write.csv(st_drop_geometry(geomodel_lst$int_pnt),"G:/Geohydrology/RB/eaocen_base_svm.csv")
 }
 
 # FUNC ################
 line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
-                      country,grid_reso,obs_points_u,unit_bounds_st,
+                      country,grid_reso,obs_points_u,obs_inclod,unit_bounds_st,
                       geology_blocks_st,algorithm_s,ap_lst,
                       upper_layer,rst_cutter){
   
@@ -119,7 +122,22 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   
   # 3.2 Subsurface Elevations ==================================================
   message("3.2 Subsurface Elevations")
-  
+  if (!is.null(obs_points_u)==T){
+    obs_points4int = obs_points_u %>% 
+      mutate(Distance=0,
+             Elevation=targ_dpt,
+             Horizon=horizons_db_pnt$Horizon[1],
+             method="observer",
+             ID=as.character(well_id),
+             Range=0) 
+    obs_points4int_st = st_as_sf(obs_points4int, coords = c("Longitude", "Latitude"), crs =4326,remove=F) %>% 
+      subset(.,,names(horizons_db_pnt))  %>% 
+      st_intersection(.,work_zone)
+    if(obs_inclod==T){
+      horizons_db_pnt=bind_rows(horizons_db_pnt,obs_points4int_st)
+    }
+ 
+  }
   # 4. Build Grid ##############################################################
   message("4. Build Grid")
   raw_grid=raster(extent(work_zone_sp), resolution = c(grid_reso,grid_reso),
@@ -285,6 +303,7 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
       int_svm=int
       
     }
+    
     if (algorithm_s == "Random Forests"){
       ### 5.2.3 Random Forests -------------------------------------------------
       message(paste0("Interpolate By: ", algorithm_s))
