@@ -2232,19 +2232,46 @@ server <- function(input, output, session) {
     ### Set outpost ------------------------------------------------------------
     geomdl=list()
     
-    # Raster 
+    # Raster ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     geomdl$rst=geomodel
     
-    # Contour
+    # Contour ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if(as.character(expm_rct())=="Contour"){
       geomdl$cont=st_as_sf(rasterToContour(geomodel,nlevels = input$contour_res))
     } else {
       geomdl$cont=st_as_sf(rasterToContour(geomodel,nlevels = 10))
     }
     
-    # XYZ Grid
+    # XYZ Grid ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if(as.character(expm_rct())=="XYZ Grid" & !is.null(gmgrid_pnt)==T){
-      geomdl$xyz = gmgrid_pnt %>%  mutate(int_z=raster::extract(geomodel,.)) 
+      xyz = gmgrid_pnt %>% mutate(int_z=raster::extract(geomodel,.))
+      
+      # Check data extracting
+      z_n=length(na.omit(xyz$int_z))
+      xy_n=nrow(xyz)
+      if(xy_n>z_n){
+        cover_ratio=round(100*z_n/xy_n,2)
+        cover_n=xy_n-z_n
+        messeges_str=paste0("The raster cover directly only ",cover_ratio,"% form your gird. " ,
+                            cover_n," cells filled nearest neighbor method cells." )
+        showModal(modalDialog(
+          title = "Data warning: ",
+          messeges_str,
+          easyClose = TRUE,
+          footer = NULL
+        ))
+        xyz_na=dplyr::filter(xyz,is.na(int_z)==T) %>% dplyr::select(-int_z)
+        xyz_notna=dplyr::filter(xyz,is.na(int_z)==F)
+        
+        nn_ids=nngeo::st_nn(xyz_na, xyz_notna) %>% Reduce(rbind,.)
+        xyz2fill=xyz_notna[nn_ids,]
+        xyz_na$int_z=xyz2fill$int_z
+        
+        geomdl$xyz=bind_rows(xyz_notna,xyz_na)
+      } else {
+        geomdl$xyz = xyz
+      }
+      
     }
     
     # #Upper layer
