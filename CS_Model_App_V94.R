@@ -56,7 +56,7 @@ message("Source Tools Scrips and functions")
 Background_path="G:/Geohydrology" # %%%%%%%%% Change while moved to unplugged  %%%%
 # Prodact_path=paste0(Background_path,"/Geohydrology/Apps/CS_Model_V01/Products")
 source('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
-source('scripts/CS_Model_Code_V40.R', encoding = 'UTF-8') #debugSource
+debugSource('scripts/CS_Model_Code_V40.R', encoding = 'UTF-8') #debugSource
 source('scripts/Horizons_Model_Code_V9.R', encoding = 'UTF-8') #debugSource
 debugSource('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
 debugSource('scripts/Geology_Model_Code_V1.R', encoding = 'UTF-8') #debugSource
@@ -163,7 +163,7 @@ geomdl=NULL
 # Additional Layers
 additional_layers_df=read.csv(paste0(design_pth,"/additional_layers_ids_V1.csv"))
 additional_layers_lst=list()
-
+DTM_rst=NULL
 # Visualization
 noHide_status<<-F
 zoom_old=10
@@ -372,7 +372,7 @@ ui <- fluidPage(
                           fluidRow(
                             # Buffer Selection ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~-
                             numericInput("Buffer",  msgactionBttn(infoId="Buffer_info",color="default",c_label="Search strip width around the CS [km]:"),
-                                         min = 0.01, max = 2, value = 0.4,step=0.01)
+                                         min = 0.01, max = 10, value = 0.4,step=0.01)
                           ),
                           DTOutput("CS_model_system")),
                  
@@ -1129,7 +1129,7 @@ server <- function(input, output, session) {
     if(inFile$type=="image/tiff" & input$additional_layers_type=="Digital Terrain Model (raster)"){
       DTM_rst=raster(inFile$datapath)
       if(as.character(crs(DTM_rst))!="+proj=longlat +datum=WGS84 +no_defs"){
-        DTM_rst=projectRaster(DTM_rst, crs = 4326)
+        raster::crs(DTM_rst)=4326
       }
       additional_layers_lst$DTM_rst=DTM_rst
       additional_layers_lst<<-additional_layers_lst
@@ -1138,7 +1138,7 @@ server <- function(input, output, session) {
     else if (inFile$type=="image/tiff" & input$additional_layers_type=="Geological layer (raster)"){
       DEM_rst=raster(inFile$datapath)
       if(as.character(crs(DEM_rst))!="+proj=longlat +datum=WGS84 +no_defs"){
-        DEM_rst=projectRaster(DTM_rst, crs = 4326)
+        raster::crs(DEM_rst)=4326
       }
       names(DEM_rst)="user_geology_layer"
       additional_layers_lst$DEM_rst=DEM_rst
@@ -1190,7 +1190,7 @@ server <- function(input, output, session) {
       
       # Selected wells
       print("Selected wells")
-      drawn_polygon = st_buffer(drawn_polyline_st, dist=input$Buffer*1000)
+      drawn_polygon = st_buffer(drawn_polyline_st, dist=input$Buffer*850) # 43.5 = Conversion ratio KM to dd,  In practice, an empirical ratio is used according to wells in the Beit She'an Valley
       CS_wells_coordinates=st_as_sf(CS_model_system,coords = c("Longitude","Latitude"),crs=4326)
       CS_model_system_slc=setDF(st_drop_geometry(st_intersection(CS_wells_coordinates,drawn_polygon)))
       Geology_Descriptions_slc=Geology_Description_ss[Geology_Description_ss$well_id %in% CS_model_system_slc$well_id, ]  
