@@ -107,6 +107,21 @@ wellsmap=function(CS_model_system,geogrid,transforms_shp,viewdif){
       editOptions = pmEditOptions(preventMarkerRemoval = TRUE, draggable = FALSE),
       cutOptions = pmCutOptions(snappable = FALSE, allowSelfIntersection = FALSE)
     ) %>% 
+    addMeasure(
+      position = "topleft",
+      primaryLengthUnit = "kilometers",
+      secondaryLengthUnit = NULL,
+      primaryAreaUnit = "sqmeters",
+      secondaryAreaUnit = NULL,
+      activeColor = "#ABE67E",
+      completedColor = "#C8F2BE",
+      popupOptions = list(className = "leaflet-measure-resultpopup", autoPanPadding = c(10,
+                                                                                        10)),
+      captureZIndex = 10000,
+      localization = "en",
+      decPoint = ".",
+      thousandsSep = ","
+    ) %>% 
     addLayersControl(overlayGroups = c('draw'), options =
                        layersControlOptions(collapsed=F))
 }
@@ -193,6 +208,21 @@ wellsmap_n=function(CS_model_system,geogrid,transforms_shp,viewdif,localtiles_df
       ),
       editOptions = pmEditOptions(preventMarkerRemoval = TRUE, draggable = FALSE),
       cutOptions = pmCutOptions(snappable = FALSE, allowSelfIntersection = FALSE)) %>% 
+    addMeasure(
+      position = "topleft",
+      primaryLengthUnit = "kilometers",
+      secondaryLengthUnit = NULL,
+      primaryAreaUnit = "sqmeters",
+      secondaryAreaUnit = NULL,
+      activeColor = "#ABE67E",
+      completedColor = "#C8F2BE",
+      popupOptions = list(className = "leaflet-measure-resultpopup", autoPanPadding = c(10,
+                                                                                        10)),
+      captureZIndex = 10000,
+      localization = "en",
+      decPoint = ".",
+      thousandsSep = ","
+    ) %>% 
     addLayersControl(overlayGroups = c('draw'), options =
                        layersControlOptions(collapsed=F))
 }
