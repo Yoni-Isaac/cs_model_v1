@@ -151,7 +151,7 @@ cs_model=function(in_param)
   
   if(exists("DEM_rst",where=additional_layers_lst)==T) {
     # 1.2.2 DEMs - Additional ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    message("1.2.2 DEMs - Additional")  
+    message("1.2.2 DEMs - Additional") 
     if(NROW(actiev_library_n)==0){
       DEMs.list=list()
       i=0
