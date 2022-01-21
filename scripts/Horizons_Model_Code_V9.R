@@ -81,7 +81,7 @@ fill_horizons=function(tab_raw,res,int_mathos){
           summarise(start=min(Distance,na.rm=T),
                     end=max(Distance,na.rm=T),
                     dist=end-start,
-                    nods=dist/res)
+                    nods=ifelse(dist/res>2,dist/res,2))
         int_j=data.frame(Elevation=c(int_func(tab_raw_j$Elevation,
                                               n=tab_dims_j$nods,
                                               #yleft=tab_raw_j$Elevation[j], yright=tab_raw_j$Elevation[j-1],
@@ -264,7 +264,7 @@ fix_horizons=function(tab,DEM_plot_df,cs_id,horizons,horizons_db,current_line,li
   tab_coord=coordinate_horizons(
     fill_horizons=tab,
     DEM_plot_df=DEM_plot_df,
-    max_range=10
+    max_range=Inf
   )
   acth=dplyr::distinct(tab_coord,Horizon,Segment)
   
@@ -354,7 +354,7 @@ add_horizons=function(tab,DEM_plot_df,wells,manual_pnt,cs_id,horizons,horizons_d
   tab_coord=coordinate_horizons(
     fill_horizons=tab,
     DEM_plot_df=DEM_plot_df,
-    max_range=10
+    max_range=Inf
   )
   
   horizons=combine_sources(
