@@ -20,14 +20,14 @@ library(kernlab)   # Support Vector Machine
 # # Unit = Top Senon
 if(Type_of_runing=="u_t"){
   
-  horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/Fixed_CS-A2Z_V2.csv")
+  horizons_db_i=read.csv("G:/Geohydrology/Models/EastMt/CS_lines/judea_all_units_V1.csv")
   notincluded=NULL#"GG'"
-  surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp")
+  surface_unit_st=raster("G:/Geohydrology/Models/EastMt/DTM_EstMt_smooth.tif")
   country="Israel"
   grid_reso=0.00001*1000 # Convert resolution to dd
-  obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv")
+  obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u_judeaUP.csv")
   obs_inclod=F
-  unit_bounds_st=st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/5-Senon_Update_polys.shp")) %>% st_transform(.,crs = 4326) 
+  unit_bounds_st=st_read("G:/Geohydrology/Models/EastMt/UGRID_SHAPE/4-judeaUP_polys.shp") %>% st_transform(.,crs = 4326) 
   geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326)
   #
   # algorithm_s="Kriging"
@@ -38,8 +38,9 @@ if(Type_of_runing=="u_t"){
   # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
   algorithm_s="Support Vector Machine"
   ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
-  upper_layer=raster("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/DTM_EstMt_smooth.tif")
+  upper_layer=raster("G:/Geohydrology/Apps/CS_Model_V02/data/DEMs/north_eastren_eocene_Base.tif")
   rst_cutter=T
+  dtm_not2cut=F
   
   
   tictoc::tic()
@@ -63,7 +64,8 @@ if(Type_of_runing=="u_t"){
     # algorithm_s="Support Vector Machine",
     # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
     upper_layer,
-    rst_cutter=F
+    rst_cutter=F,
+    dtm_not2cut=F
   )
   tictoc::toc()
   
@@ -76,7 +78,7 @@ if(Type_of_runing=="u_t"){
 line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
                       country,grid_reso,obs_points_u,obs_inclod,unit_bounds_st,
                       geology_blocks_st,algorithm_s,ap_lst,
-                      upper_layer,rst_cutter){
+                      upper_layer,rst_cutter,dtm_not2cut){
   
   # 1. Get Core DB #############################################################
   message("1. Get Core DB")
@@ -335,14 +337,28 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
     
   }
   # 6.Post Processing ##########################################################
+  ## 6.1 Increase Resolution ===================================================
   ss <- raster(resolution=c(grid_reso*0.1,grid_reso*0.1), crs=proj4string(int), ext=extent(int)) 
   int4export <- resample(int, ss)
   
+  ## 6.2 Cut with uppers =======================================================
+  ### 6.2.1 Upper Layer --------------------------------------------------------
   if(rst_cutter==T & !is.null(upper_layer)==T){
     upper_layer_rs <- resample(upper_layer, int4export)
     s <- stack(int4export, upper_layer_rs)
     rc <- function(int4export,upper_layer_rs) {ifelse(int4export>=upper_layer_rs,upper_layer_rs,int4export)} 
-    int4export <- overlay(s, fun=rc)
+    overlay_rs <- overlay(s, fun=rc)
+    out_rs=raster::mask(int4export,upper_layer_rs,inverse=T)
+    int4export=raster::mosaic(overlay_rs,out_rs,fun=mean)
+  }
+  ### 6.2.2 Topography ---------------------------------------------------------
+  if(dtm_not2cut==F){
+    DTM_rst_rs <- resample(DTM_rst, int4export)
+    s <- stack(int4export, DTM_rst_rs)
+    rc <- function(int4export,DTM_rst_rs) {ifelse(int4export>=DTM_rst_rs,DTM_rst_rs,int4export)}
+    overlay_rs <- overlay(s, fun=rc)
+    out_rs=raster::mask(int4export,DTM_rst_rs,inverse=T)
+    int4export=raster::mosaic(overlay_rs,out_rs,fun=mean)
   }
 
   # 7. Export Elements #########################################################

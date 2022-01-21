@@ -254,7 +254,7 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
   
   cs_pal <- colorNumeric(edited_palette, horizons_db_i$Elevation,na.color = "transparent")
   
-  
+  Sys.sleep(1)
   # Set base proxy map
   proxy_geo2d_map = geo2d_map %>% 
     clearGroup(group="geomodel") %>% 
