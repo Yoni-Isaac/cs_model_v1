@@ -57,7 +57,7 @@ Background_path="G:/Geohydrology" # %%%%%%%%% Change while moved to unplugged  %
 # Prodact_path=paste0(Background_path,"/Geohydrology/Apps/CS_Model_V01/Products")
 source('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
 debugSource('scripts/CS_Model_Code_V40.R', encoding = 'UTF-8') #debugSource
-source('scripts/Horizons_Model_Code_V9.R', encoding = 'UTF-8') #debugSource
+debugSource('scripts/Horizons_Model_Code_V9.R', encoding = 'UTF-8') #debugSource
 debugSource('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
 debugSource('scripts/Geology_Model_Code_V1.R', encoding = 'UTF-8') #debugSource
 
@@ -594,8 +594,8 @@ ui <- fluidPage(
                                                         choices=NULL),
                                      ),
                                      column(2,
-                                            checkboxInput("obs_inclod",label =""),
-                                            )
+                                            materialSwitch("obs_inclod",label ="", status = "danger",value = F,right = F),
+                                     )
                                    ),
                                    # Model Builder - Unit Boundary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    fluidRow(
@@ -655,6 +655,7 @@ ui <- fluidPage(
                                                          label =""
                                             ),
                                             checkboxInput("rst_cutter",label =""),
+                                            materialSwitch("dtm_not2cut",label ="", status = "danger",value = F,right = F),
                                      )
                                    ),
                                    # Model Builder - Grid Resolution ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -839,7 +840,7 @@ server <- function(input, output, session) {
         useShinyalert(),
         selectInput(inputId="Background",label = msgactionBttn(infoId="Background_info",color="warning",c_label="Subsurface libraries: "),
                     multiple=T,
-                    choices=c("National"="national"),
+                    choices =c("National"="national"),
                     selected = "national",))}
   }) # Close Mode
   # Load Base Map ------------------------------------------------------------------------------
@@ -1395,7 +1396,12 @@ server <- function(input, output, session) {
                                     # Directly Sub products
                                     initial_view<<-"active"
                                     current_line<<-st_as_sf(charts$cs_data$CS_line) %>% st_set_crs(4326)
-                                    cln_tmprl()
+                                    # Clear Horizons DBs
+                                    fill_horizons_coord<<-NULL
+                                    horizons<<-NULL
+                                    tab_raw<<-NULL
+                                    tab<<-NULL
+                                    cs_tagging<<-NULL
                                   },
                                   message = function(m) {
                                     shinyjs::html(id = "cs_messages", html = m$message, add = F)
@@ -1468,40 +1474,43 @@ server <- function(input, output, session) {
                           label = "Select horizon:",
                           choices = as.character(cs_horizons$f_name)
         )
+        
+        
+        ## Load initial View =======================================================
+        ### Editable Cross Section -------------------------------------------------
+        if(is.null(cs_tagging)==T){
+          output$cs_tagging<-renderPlot({
+            req(charts$cs_raw)
+            req(initial_view=="active")
+            initial_view="done"
+            if(!is.null(horizons_db)){
+              # Get Junction Points ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+              message("Get Junction Points")
+              nodes_links_df=nodes_linker(current_line,lines_db,horizons_db,charts)
+              # Render Initial CS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+              message("Render Initial CS")
+              
+              if (nrow(nodes_links_df)>0){
+                cs_tagging<<-charts$cs_raw+
+                  new_scale_color()+
+                  geom_label(data=nodes_links_df,aes(x=Distance,y=Elevation,color=Horizon,size=5,label=ID))+
+                  scale_colour_manual(values=ColourExpreation_DEM())
+                cs_tagging  
+              } else{
+                message("There is no Junction Points")
+                cs_tagging<<-charts$cs_raw
+                cs_tagging
+              }
+            } else {
+              cs_tagging<<-charts$cs_raw
+              cs_tagging}
+          })
+        }
+        # Close Initial view option until next run ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        if(initial_view=="done"){initial_view="inactive"}
       })
     
-    ## Load initial View =======================================================
-    ### Editable Cross Section -------------------------------------------------
-    if(is.null(cs_tagging)==T){
-      output$cs_tagging<-renderPlot({
-        req(charts$cs_raw)
-        req(initial_view=="active")
-        initial_view="done"
-        if(!is.null(horizons_db)){
-          # Get Junction Points ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-          message("Get Junction Points")
-          nodes_links_df=nodes_linker(current_line,lines_db,horizons_db,charts)
-          # Render Initial CS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-          message("Render Initial CS")
-          
-          if (nrow(nodes_links_df)>0){
-            cs_tagging<<-charts$cs_raw+
-              new_scale_color()+
-              geom_label(data=nodes_links_df,aes(x=Distance,y=Elevation,color=Horizon,size=5,label=ID))+
-              scale_colour_manual(values=ColourExpreation_DEM())
-            cs_tagging  
-          } else{
-            message("There is no Junction Points")
-            cs_tagging<<-charts$cs_raw
-            cs_tagging
-          }
-        } else {
-          cs_tagging<<-charts$cs_raw
-          cs_tagging}
-      })
-    }
-    # Close Initial view option until next run ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if(initial_view=="done"){initial_view="inactive"}
+    
     ### Set Initial Table ------------------------------------------------------
     if(!is.null(tab_raw)==T){tab_raw=NULL}
     message("Set Initial Table")
@@ -1882,7 +1891,7 @@ server <- function(input, output, session) {
     observeEvent(input$obs_inclod,{
       req(input$obs_inclod==T)
       req(!is.null(Geology_Description_ss)==T)
-      messeges_str="You have chosen to include the points in the interpolation directly and not through the cross-sections.
+      messeges_str="You chose to include the points in the interpolation directly and not through the cross-sections.
       This can cause distortions in the results and a longer duration of the interpolation process."
       showModal(modalDialog(
         title = "Data warning: ",
@@ -1892,6 +1901,17 @@ server <- function(input, output, session) {
       )) 
     })
     
+    ### Topography -------------------------------------------------------------
+    observeEvent(input$dtm_not2cut,{
+      req(input$dtm_not2cut==T)
+      messeges_str="Note, you have chosen not to cut the geological layer with the surface."
+      showModal(modalDialog(
+        title = "Data warning: ",
+        messeges_str,
+        easyClose = TRUE,
+        footer = NULL
+      )) 
+    })
     ## Set & Switch View =======================================================
     # Set base 2D map
     if(is.null(c(geomdl,upper_rst, unit_bounds_st))==T){
@@ -2179,7 +2199,7 @@ server <- function(input, output, session) {
       left_join(.,subset(INDEX,,c(input$CS_type,"f_name"))) %>% 
       dplyr::filter(f_name %in% input$observation_points) %>% 
       dplyr::distinct_all(,.keep_all = T)
-     
+    
     
     if(input$horizon_type=="Base"){
       obs_points_u <<- obs_points_i %>% group_by(well_id,elv,Longitude,Latitude) %>% 
@@ -2220,7 +2240,8 @@ server <- function(input, output, session) {
                        algorithm_s=input$interpolation_algorithm,
                        ap_lst=ap_lst,
                        upper_layer=upper_rst,
-                       rst_cutter=input$rst_cutter
+                       rst_cutter=input$rst_cutter,
+                       dtm_not2cut=input$dtm_not2cut
                      )
                    },
                    message = function(m) {
