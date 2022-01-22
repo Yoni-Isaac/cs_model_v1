@@ -39,7 +39,7 @@ if(Type_of_runing=="u_t"){
   algorithm_s="Support Vector Machine"
   ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
   upper_layer=raster("G:/Geohydrology/Apps/CS_Model_V02/data/DEMs/north_eastren_eocene_Base.tif")
-  rst_cutter=T
+  rst_cutter=5
   dtm_not2cut=F
   
   
@@ -64,7 +64,7 @@ if(Type_of_runing=="u_t"){
     # algorithm_s="Support Vector Machine",
     # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25),
     upper_layer,
-    rst_cutter=F,
+    rst_cutter=5,
     dtm_not2cut=F
   )
   tictoc::toc()
@@ -343,10 +343,10 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   
   ## 6.2 Cut with uppers =======================================================
   ### 6.2.1 Upper Layer --------------------------------------------------------
-  if(rst_cutter==T & !is.null(upper_layer)==T){
+  if(!is.na(rst_cutter)==T & !is.null(upper_layer)==T){
     upper_layer_rs <- resample(upper_layer, int4export)
     s <- stack(int4export, upper_layer_rs)
-    rc <- function(int4export,upper_layer_rs) {ifelse(int4export>=upper_layer_rs,upper_layer_rs,int4export)} 
+    rc <- function(int4export,upper_layer_rs) {ifelse(int4export>=upper_layer_rs,upper_layer_rs-rst_cutter,int4export)} 
     overlay_rs <- overlay(s, fun=rc)
     out_rs=raster::mask(int4export,upper_layer_rs,inverse=T)
     int4export=raster::mosaic(overlay_rs,out_rs,fun=mean)
