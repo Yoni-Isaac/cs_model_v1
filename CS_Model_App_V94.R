@@ -638,7 +638,7 @@ ui <- fluidPage(
                                             )
                                      )
                                    ),
-                                   # Model Builder - Geology Blocks ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   # Model Builder - Upper Layer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                                    fluidRow(
                                      column(width = 7,
                                             fileInput('upper_layer',
@@ -649,12 +649,12 @@ ui <- fluidPage(
                                             ),
                                             
                                      ),
-                                     column(width = 2,
+                                     column(width = 3,
                                             actionButton("rst_upper", # Refresh Button
                                                          icon = tags$i(class = "fas fa-redo", style="font-size: 20px"),
                                                          label =""
                                             ),
-                                            checkboxInput("rst_cutter",label =""),
+                                            numericInput("rst_cutter",label ="",min = 0, max =  50, value = NA,step=5),
                                             materialSwitch("dtm_not2cut",label ="", status = "danger",value = F,right = F),
                                      )
                                    ),
@@ -2067,6 +2067,7 @@ server <- function(input, output, session) {
     ) %>%
       clearGroup(group="geo_upper")
   })
+  
   ## Set Export Target =========================================================
   # Export Model -  Frontend
   expm_rct=reactive({input$expm_v})
@@ -2107,73 +2108,6 @@ server <- function(input, output, session) {
       
     }
   })
-  
-  # Export Model - Backed ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
-  # Raster 
-  output$dnl2rst <-  downloadHandler(
-    message("Download Geology Model"),
-    filename = function() { 
-      paste("Geology Model_", Sys.Date(), ".tif", sep=""
-      )
-    },
-    content = function(file) {
-      writeRaster(geomdl$rst,selfcontained = T, filename=file)
-    })
-  
-  # Personal XYZ
-  observeEvent(input$gomdl_grid,{
-    req(as.character(expm_rct())=="XYZ Grid") 
-    gmFile=fread(input$gomdl_grid$datapath) %>%
-      as_tibble(.) %>% 
-      mutate(across(.cols = everything(), .fns = toupper),
-             across(.cols = everything(), .fns = as.numeric))
-    nms=names(gmFile)
-    if("X" %in% nms & input$country!="Indefinite") {
-      crs_id=subset(localtiles_df,country==input$country,crs)
-      gmgrid_pnt<<-st_as_sf(gmFile,
-                            coords = c("X", "Y"), crs =as.numeric(crs_id),remove=F) %>% 
-        st_transform(.,crs =4326)
-      
-      messeges_str="The coordinate system has been converted from a local projection to an international projection.
-                        There may be a deviation of few meters of the grid points."
-      showModal(modalDialog(
-        title = "Projection seting: ",
-        messeges_str,
-        easyClose = TRUE,
-        footer = NULL
-      )) 
-      
-      
-    } else {
-      gmgrid_pnt<<-st_as_sf(gmFile,
-                            coords = c("LON", "LAT"), crs =4326,remove=T)
-    }
-  })
-  # gomdl_grid_rct <- reactive({ 
-  #   
-  #   return(gmgrid_pnt)
-  # })
-  
-  output$dnl2grid <-  downloadHandler(
-    message("Download Geology Model"),
-    filename = function() { 
-      paste("Geology Model_", Sys.Date(), ".csv", sep=""
-      )
-    },
-    content = function(file) {
-      fwrite(as.data.table(geomdl$xyz), file=file, row.names=F)
-    })
-  
-  output$dnl2cont <-  downloadHandler(
-    message("Download Geology Model"),
-    filename = function() { 
-      paste("Geology Model_", Sys.Date(), ".csv", sep=""
-      )
-    },
-    content = function(file) {
-      sf::st_write(geomdl$cont, dsn=file ,delete_dsn=T,
-                   layer_options = "GEOMETRY=AS_WKT")
-    })
   
   ## Run Geology Model ========================================================= 
   observeEvent(input$RGM,{
@@ -2262,39 +2196,7 @@ server <- function(input, output, session) {
     } else {
       geomdl$cont=st_as_sf(rasterToContour(geomodel,nlevels = 10))
     }
-    
-    # XYZ Grid ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if(as.character(expm_rct())=="XYZ Grid" & !is.null(gmgrid_pnt)==T){
-      xyz = gmgrid_pnt %>% mutate(int_z=raster::extract(geomodel,.))
-      
-      # Check data extracting
-      z_n=length(na.omit(xyz$int_z))
-      xy_n=nrow(xyz)
-      if(xy_n>z_n){
-        cover_ratio=round(100*z_n/xy_n,2)
-        cover_n=xy_n-z_n
-        messeges_str=paste0("The raster cover directly only ",cover_ratio,"% form your gird. " ,
-                            cover_n," cells filled nearest neighbor method cells." )
-        showModal(modalDialog(
-          title = "Data warning: ",
-          messeges_str,
-          easyClose = TRUE,
-          footer = NULL
-        ))
-        xyz_na=dplyr::filter(xyz,is.na(int_z)==T) %>% dplyr::select(-int_z)
-        xyz_notna=dplyr::filter(xyz,is.na(int_z)==F)
-        
-        nn_ids=nngeo::st_nn(xyz_na, xyz_notna) %>% Reduce(rbind,.)
-        xyz2fill=xyz_notna[nn_ids,]
-        xyz_na$int_z=xyz2fill$int_z
-        
-        geomdl$xyz=bind_rows(xyz_notna,xyz_na)
-      } else {
-        geomdl$xyz = xyz
-      }
-      
-    }
-    
+   
     # #Upper layer
     if(!is.null(upper_rst)==T){
       upper_rs=raster::resample(upper_rst,geomodel)
@@ -2351,6 +2253,101 @@ server <- function(input, output, session) {
     
     
   })
+  
+  ## Export Model ==============================================================
+  ### Raster -------------------------------------------------------------------
+  output$dnl2rst <-  downloadHandler(
+    message("Download Geology Model"),
+    filename = function() { 
+      paste("Geology Model_", Sys.Date(), ".tif", sep=""
+      )
+    },
+    content = function(file) {
+      writeRaster(geomdl$rst,selfcontained = T, filename=file)
+    })
+  
+  # Personal XYZ ---------------------------------------------------------------
+  observeEvent(input$gomdl_grid,{
+    req(as.character(expm_rct())=="XYZ Grid") 
+    gmFile=fread(input$gomdl_grid$datapath) %>%
+      as_tibble(.) %>% 
+      mutate(across(.cols = everything(), .fns = toupper),
+             across(.cols = everything(), .fns = as.numeric))
+    nms=names(gmFile)
+    if("X" %in% nms & input$country!="Indefinite") {
+      crs_id=subset(localtiles_df,country==input$country,crs)
+      gmgrid_pnt<<-st_as_sf(gmFile,
+                            coords = c("X", "Y"), crs =as.numeric(crs_id),remove=F) %>% 
+        st_transform(.,crs =4326)
+      
+      messeges_str="The coordinate system has been converted from a local projection to an international projection.
+                        There may be a deviation of few meters of the grid points."
+      showModal(modalDialog(
+        title = "Projection seting: ",
+        messeges_str,
+        easyClose = TRUE,
+        footer = NULL
+      )) 
+      
+      
+    } else {
+      gmgrid_pnt<<-st_as_sf(gmFile,
+                            coords = c("LON", "LAT"), crs =4326,remove=T)
+    }
+  })
+  output$dnl2grid <-  downloadHandler(
+    message("Download Geology Model"),
+    filename = function() { 
+      paste("Geology Model_", Sys.Date(), ".csv", sep=""
+      )
+    },
+    content = function(file) {
+      # XYZ Grid ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      if(as.character(expm_rct())=="XYZ Grid" & !is.null(gmgrid_pnt)==T){
+        xyz = gmgrid_pnt %>% mutate(int_z=raster::extract(geomodel,.))
+        
+        # Check data extracting
+        z_n=length(na.omit(xyz$int_z))
+        xy_n=nrow(xyz)
+        if(xy_n>z_n){
+          cover_ratio=round(100*z_n/xy_n,2)
+          cover_n=xy_n-z_n
+          messeges_str=paste0("The raster cover directly only ",cover_ratio,"% form your gird. " ,
+                              cover_n," cells filled nearest neighbor method cells." )
+          showModal(modalDialog(
+            title = "Data warning: ",
+            messeges_str,
+            easyClose = TRUE,
+            footer = NULL
+          ))
+          xyz_na=dplyr::filter(xyz,is.na(int_z)==T) %>% dplyr::select(-int_z)
+          xyz_notna=dplyr::filter(xyz,is.na(int_z)==F)
+          
+          nn_ids=nngeo::st_nn(xyz_na, xyz_notna) %>% Reduce(rbind,.)
+          xyz2fill=xyz_notna[nn_ids,]
+          xyz_na$int_z=xyz2fill$int_z
+          
+          xyz4export<<-bind_rows(xyz_notna,xyz_na)
+        } else {
+          xyz4export<<-xyz
+        }
+        
+      }
+      fwrite(as.data.table(xyz4export), file=file, row.names=F)
+    })
+  ### Contour ------------------------------------------------------------------
+  output$dnl2cont <-  downloadHandler(
+    message("Download Geology Model"),
+    filename = function() { 
+      paste("Geology Model_", Sys.Date(), ".csv", sep=""
+      )
+    },
+    content = function(file) {
+      sf::st_write(geomdl$cont, dsn=file ,delete_dsn=T,
+                   layer_options = "GEOMETRY=AS_WKT")
+    })
+  
+  
   
   ## Edit Geology model ========================================================
   observeEvent(input$geo_dims,{
