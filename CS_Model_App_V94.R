@@ -1131,6 +1131,13 @@ server <- function(input, output, session) {
       DTM_rst=raster(inFile$datapath)
       if(as.character(crs(DTM_rst))!="+proj=longlat +datum=WGS84 +no_defs"){
         raster::crs(DTM_rst)=4326
+        # Set Extent 
+        ext_pnt <- as(extent(DTM_rst), 'SpatialPolygons') %>% 
+          st_as_sf(.) %>% st_cast("POINT")
+        st_crs(ext_pnt) <- localtiles_df$crs
+        ext_pnt_ll=st_transform(ext_pnt,4326)
+        ext.ll= extent(ext_pnt_ll)
+        extent(DTM_rst) <- ext.ll
       }
       additional_layers_lst$DTM_rst=DTM_rst
       additional_layers_lst<<-additional_layers_lst
@@ -1140,6 +1147,13 @@ server <- function(input, output, session) {
       DEM_rst=raster(inFile$datapath)
       if(as.character(crs(DEM_rst))!="+proj=longlat +datum=WGS84 +no_defs"){
         raster::crs(DEM_rst)=4326
+        # Set Extent 
+        ext_pnt <- as(extent(DEM_rst), 'SpatialPolygons') %>% 
+          st_as_sf(.) %>% st_cast("POINT")
+        st_crs(ext_pnt) <- localtiles_df$crs
+        ext_pnt_ll=st_transform(ext_pnt,4326)
+        ext.ll= extent(ext_pnt_ll)
+        extent(DEM_rst) <- ext.ll
       }
       names(DEM_rst)="user_geology_layer"
       additional_layers_lst$DEM_rst=DEM_rst
@@ -1195,7 +1209,7 @@ server <- function(input, output, session) {
       CS_wells_coordinates=st_as_sf(CS_model_system,coords = c("Longitude","Latitude"),crs=4326)
       CS_model_system_slc=setDF(st_drop_geometry(st_intersection(CS_wells_coordinates,drawn_polygon)))
       Geology_Descriptions_slc=Geology_Description_ss[Geology_Description_ss$well_id %in% CS_model_system_slc$well_id, ]  
-      
+
       # selected Faults
       transforms_st=st_as_sf(transforms_shp) ;st_crs(transforms_st)=4326
       junc_points=(st_intersection(drawn_polyline_st,st_crop(transforms_st,drawn_polyline_st)))
@@ -2263,7 +2277,12 @@ server <- function(input, output, session) {
       )
     },
     content = function(file) {
-      writeRaster(geomdl$rst,selfcontained = T, filename=file)
+      if(input$country!="Indefinite"){
+        rst4export=raster::projectRaster(geomdl$rst,crs=localtiles_df$crs)
+      } else{
+        rst4export=geomdl$rst
+      }
+      writeRaster(rst4export,selfcontained = T, filename=file)
     })
   
   # Personal XYZ ---------------------------------------------------------------
