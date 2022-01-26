@@ -285,19 +285,6 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
       radius =3,
       group="cs_pnts"
     ) %>%
-    addCircleMarkers(
-      data=obs_points,
-      label =~as.character(name),
-      labelOptions=labelOptions(textsize = "30px",
-                                maxWidth = 3000,
-                                maxHeight = 3000,
-                                zIndexOffset=Inf),
-      fillOpacity = 1,
-      color = "balck",
-      stroke = FALSE,
-      radius =3,
-      group="geomodel"
-    ) %>% 
     addRasterImage(geomdl$rst,
                    color = cs_pal,
                    opacity = 0.2,
@@ -306,19 +293,19 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
                        title = paste0(horizon_unit," [m amsl]"),
                        group="geomodel")
   
-  if(is.null(obs_points)==T){
+  if(!is.null(obs_points)==T & nrow(obs_points)>0){
     #obs_points_st=st_as_sf(as_tibble(obs_pnt_df_grp), coords = c("lon", "lat"), crs = 4326,remove=F)
     proxy_geo2d_map = proxy_geo2d_map %>% 
       addCircleMarkers(
         label =~paste0("name=",as.character(name)," ;z=",as.character(round(elv,0))),
-        data=obs_points, 
+        data=obs_points,
         #lat=~lat,lng=~lon,
         fillOpacity = 1,
         color = ~cs_pal(elv),
         stroke = FALSE,
         radius =6,
-        group="geomodel"
-      )
+        group="geomodel" 
+      ) 
   }
   return(proxy_geo2d_map)
 }
