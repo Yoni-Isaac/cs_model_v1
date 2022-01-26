@@ -20,14 +20,14 @@ library(kernlab)   # Support Vector Machine
 # # Unit = Top Senon
 if(Type_of_runing=="u_t"){
   
-  horizons_db_i=read.csv("G:/Geohydrology/Models/EastMt/CS_lines/judea_all_units_V1.csv")
+  horizons_db_i=read.csv("G:/Geohydrology/Models/EastMt/CS_lines/alluvium_Base_V1.csv")
   notincluded=NULL#"GG'"
-  surface_unit_st=raster("G:/Geohydrology/Models/EastMt/DTM_EstMt_smooth.tif")
+  surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st_AVDAT.shp")
   country="Israel"
-  grid_reso=0.00001*1000 # Convert resolution to dd
-  obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u_judeaUP.csv")
+  grid_reso=0.01
+  obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u_AVDAT.csv")
   obs_inclod=F
-  unit_bounds_st=st_read("G:/Geohydrology/Models/EastMt/UGRID_SHAPE/4-judeaUP_polys.shp") %>% st_transform(.,crs = 4326) 
+  unit_bounds_st=st_read("G:/Geohydrology/Models/EastMt/UGRID_SHAPE/6-eocene_polys.shp") %>% st_transform(.,crs = 4326) 
   geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326)
   #
   # algorithm_s="Kriging"
@@ -38,7 +38,7 @@ if(Type_of_runing=="u_t"){
   # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
   algorithm_s="Support Vector Machine"
   ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
-  upper_layer=raster("G:/Geohydrology/Apps/CS_Model_V02/data/DEMs/north_eastren_eocene_Base.tif")
+  upper_layer=raster("G:/Geohydrology/Apps/CS_Model_V02/data/DEMs/north_eastren_alluvium_Base.tif")
   rst_cutter=5
   dtm_not2cut=F
   
@@ -47,7 +47,7 @@ if(Type_of_runing=="u_t"){
   geomodel=line2horizon (
     horizons_db_i=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/Fixed_CS-A2Z_V2.csv"),
     notincluded=NULL,#"GG'"
-    surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp"),
+    surface_unit_st=NULL,# st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp"),
     country="Israel",
     grid_reso=0.00001*1000, # Convert resolution to dd,
     obs_points_u=NULL,#read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u.csv"),
@@ -340,9 +340,19 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   ## 6.1 Increase Resolution ===================================================
   ss <- raster(resolution=c(grid_reso*0.1,grid_reso*0.1), crs=proj4string(int), ext=extent(int)) 
   int4export <- resample(int, ss)
-  
+
   ## 6.2 Cut with uppers =======================================================
-  ### 6.2.1 Upper Layer --------------------------------------------------------
+  ### 6.2.1 Outcrops (surface Unit) --------------------------------------------
+  if(!is.na(surface_unit_st)==T){
+    DTM_outcrops=raster::mask(crop(DTM_rst,surface_unit_st),surface_unit_st)
+    DTM_outcrops_rs=resample(DTM_outcrops, ss)
+    int4export=raster::mosaic(DTM_outcrops_rs,int4export,fun=max)
+    if(!is.na(unit_bounds_st)==T){
+    int4export=raster::mask(crop(int4export,unit_bounds_st),unit_bounds_st)
+    }
+  }
+  
+  ### 6.2.2 Upper Layer --------------------------------------------------------
   if(!is.na(rst_cutter)==T & !is.null(upper_layer)==T){
     upper_layer_rs <- resample(upper_layer, int4export)
     s <- stack(int4export, upper_layer_rs)
@@ -351,7 +361,7 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
     out_rs=raster::mask(int4export,upper_layer_rs,inverse=T)
     int4export=raster::mosaic(overlay_rs,out_rs,fun=mean)
   }
-  ### 6.2.2 Topography ---------------------------------------------------------
+  ### 6.2.3 Topography ---------------------------------------------------------
   if(dtm_not2cut==F){
     DTM_rst_rs <- resample(DTM_rst, int4export)
     s <- stack(int4export, DTM_rst_rs)
