@@ -395,7 +395,19 @@ df2rst=function(int_df,grid_reso,work_zone_sp){
   return(int)
 }
 
-
-
+# Supportive Functions ######################################################### 
+# Update Wells list on the geo model tub ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+geo_obs_updt=function(INDEX,Geology_Description_ss,CS_type){
+  INDEX_obs = INDEX %>% 
+    dplyr::filter(type==CS_type) %>% 
+    dplyr::rename("{CS_type}":=f_ID)
+  
+  Geology_Description_trg<<- Geology_Description_ss %>% 
+    subset(.,,c(CS_type)) %>% 
+    left_join(.,subset(INDEX_obs,,c(CS_type,"f_name"))) %>% 
+    dplyr::filter(!is.na(f_name)) %>% 
+    dplyr::distinct(f_name,.keep_all = F)
+  return(Geology_Description_trg)
+}
 
 
