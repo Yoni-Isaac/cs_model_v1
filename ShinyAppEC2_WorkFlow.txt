@@ -1,0 +1,44 @@
+# EC2 Virtual Machine ######################################################
+VM type need to be t3..
+System is Ubuntu 20.04
+## Pricing Calculator ======================================================
+https://calculator.aws/#/createCalculator/EC2
+## Build Machine (Steps 1-4) ===============================================
+https://towardsdatascience.com/how-to-host-a-r-shiny-app-on-aws-cloud-in-7-simple-steps-5595e7885722
+## Instance Resize =========================================================
+https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-resize.html
+
+# Workspace ################################################################
+## Install R & R pakcages on Ubuntu ========================================
+https://rtask.thinkr.fr/installation-of-r-4-0-on-ubuntu-20-04-lts-and-tips-for-spatial-packages/#Install_new_version_of_R_40
+### Extnral pakcages install -----------------------------------------------
+sudo apt install r-cran-sf
+sudo apt install r-cran-rgdal
+...
+### Install pakcages via R -------------------------------------------------
+libs=c("tm","rgdal","raster","sf","htmlwidgets","leafpm","leaflet","leaflet.extras"
+        ,"sp","lwgeom","maptools","mapview","mapedit","Orcs","dplyr","readxl","googledrive",
+        "data.table","DT","stringr","openxlsx",  "readr","ggrepel","ggnewscale","plotly",
+        "officer","grid", "utils","aws.s3","tibble","proj4","purrr","tidyverse","cowplot",
+        "slickR",  "shiny","shinycssloaders","shinybusy","shinyjs","shinyBS", # "magick",
+        "shinyLP","shinythemes","shinyalert","shinyWidgets")
+install.packages(libs)
+lapply(libs, require, character.only = TRUE)
+## Install Rstudio (Not necessary) =========================================
+https://linuxconfig.org/how-to-install-rstudio-on-ubuntu-20-04-focal-fossa-linux
+Commands:
+wget https://download1.rstudio.org/desktop/bionic/amd64/rstudio-2022.02.0-443-amd64.deb
+sudo gdebi rstudio-2022.02.0-443-amd64.deb
+
+# Host an R Shiny App on AWS (Steps 5-7) ###################################
+https://towardsdatascience.com/how-to-host-a-r-shiny-app-on-aws-cloud-in-7-simple-steps-5595e7885722
+URL:
+ec2-XX-XX-XXX-XX.us-east-2.compute.amazonaws.com:3838/csms221
+Commands:
+sudo -i (move to root)
+sudo mkdir /srv/shiny-server/csms221
+sudo chmod 777 /srv/shiny-server/csms221
+
+
+ 
+ 
