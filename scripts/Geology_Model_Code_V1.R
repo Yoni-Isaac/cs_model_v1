@@ -1,8 +1,3 @@
-# CSMS Moac Parameters ##############################
-Background_path="G:/Geohydrology"
-basemap_pth=paste0("data/Background_layers/BaseMaps/")
-Type_of_runing="t"
-`%notin%` <<- Negate(`%in%`)
 # source("G:/Temporary_Scripts/idw_try.R")
 library(ipdw)
 library(htmltools)
@@ -14,11 +9,19 @@ library(automap)   # Automatized approach to Kriging
 library(ranger)    # Random Forests
 library(neuralnet) # Neural Networks
 library(kernlab)   # Support Vector Machine 
+Type_of_runing="t"
+`%notin%` <<- Negate(`%in%`)
+
 
 # Unit Test ####################
 
 # # Unit = Top Senon
 if(Type_of_runing=="u_t"){
+  # CSMS Moac Parameters ##############################
+  Background_path="G:/Geohydrology"
+  basemap_pth=paste0("data/Background_layers/BaseMaps/")
+  
+  
   
   horizons_db_i=read.csv("G:/Geohydrology/Models/EastMt/CS_lines/alluvium_Base_V1.csv")
   notincluded=NULL#"GG'"
@@ -76,9 +79,9 @@ if(Type_of_runing=="u_t"){
 
 # FUNC ################
 line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
-                      country,grid_reso,obs_points_u,obs_inclod,unit_bounds_st,
-                      geology_blocks_st,algorithm_s,ap_lst,
-                      upper_layer,rst_cutter,dtm_not2cut){
+                        country,grid_reso,obs_points_u,obs_inclod,unit_bounds_st,
+                        geology_blocks_st,algorithm_s,ap_lst,
+                        upper_layer,rst_cutter,dtm_not2cut){
   
   # 1. Get Core DB #############################################################
   message("1. Get Core DB")
@@ -138,7 +141,7 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
     if(obs_inclod==T){
       horizons_db_pnt=bind_rows(horizons_db_pnt,obs_points4int_st)
     }
- 
+    
   }
   # 4. Build Grid ##############################################################
   message("4. Build Grid")
@@ -153,8 +156,9 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   
   # 5. Interpolate #############################################################
   message("5. Interpolate")
-  ## 5.1 Classical algorithm ===================================================
   if (algorithm_s=="Kriging"){
+    ## 5.1 Classical algorithm ===================================================
+    message("5.1 Classical algorithm")
     ### 5.1.1 Kriging ----------------------------------------------------------
     message(paste0("Interpolate By: ", algorithm_s))
     
@@ -201,6 +205,7 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   (algorithm_s %notin% c("Kriging", "IDW") )
   {
     ## 5.2 Machine learning algorithms =========================================
+    message("5.2 Machine learning algorithms")
     ## after: https://swilke-geoscience.net/post/spatial_ml/
     
     sample_sf  <- st_as_sf(
@@ -337,18 +342,19 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
     
   }
   # 6.Post Processing ##########################################################
+  message("6.Post Processing")
   ## 6.1 Increase Resolution ===================================================
   ss <- raster(resolution=c(grid_reso*0.1,grid_reso*0.1), crs=proj4string(int), ext=extent(int)) 
   int4export <- resample(int, ss)
-
+  
   ## 6.2 Cut with uppers =======================================================
   ### 6.2.1 Outcrops (surface Unit) --------------------------------------------
-  if(!is.na(surface_unit_st)==T){
+  if(!is.null(surface_unit_st)==T){
     DTM_outcrops=raster::mask(crop(DTM_rst,surface_unit_st),surface_unit_st)
     DTM_outcrops_rs=resample(DTM_outcrops, ss)
     int4export=raster::mosaic(DTM_outcrops_rs,int4export,fun=max)
-    if(!is.na(unit_bounds_st)==T){
-    int4export=raster::mask(crop(int4export,unit_bounds_st),unit_bounds_st)
+    if(!is.null(unit_bounds_st)==T){
+      int4export=raster::mask(crop(int4export,unit_bounds_st),unit_bounds_st)
     }
   }
   
@@ -370,7 +376,7 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
     out_rs=raster::mask(int4export,DTM_rst_rs,inverse=T)
     int4export=raster::mosaic(overlay_rs,out_rs,fun=mean)
   }
-
+  
   # 7. Export Elements #########################################################
   message("7. Export Elements")
   message("Geology Model was Successfully Completed")
