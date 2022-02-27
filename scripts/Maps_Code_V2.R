@@ -260,11 +260,11 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
     clearGroup(group="geomodel") %>% 
     addPolylines(data=geomdl$cont,
                  fill = FALSE,
-                 color="white",
+                 color="black",
                  weight = 1,
                  opacity = 0.9,
                  smoothFactor = 0,
-                 group="geomodel") %>%
+                 group="geomodel")  %>%
     addCircleMarkers(
       data=horizons_db_i,
       label =~paste0("Id=",as.character(ID)," ;x=",as.character(round(Distance,0))," ;z=",as.character(round(Elevation,0))),
@@ -284,7 +284,7 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
       stroke = FALSE,
       radius =3,
       group="cs_pnts"
-    ) %>%
+    )  %>%
     addRasterImage(geomdl$rst,
                    color = cs_pal,
                    opacity = 0.2,
@@ -292,10 +292,10 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
     leaflet::addLegend(pal = cs_pal, values = horizons_db_i$Elevation,position ="topright",
                        title = paste0(horizon_unit," [m amsl]"),
                        group="geomodel")
-  
+
   if(!is.null(obs_points)==T & nrow(obs_points)>0){
     #obs_points_st=st_as_sf(as_tibble(obs_pnt_df_grp), coords = c("lon", "lat"), crs = 4326,remove=F)
-    proxy_geo2d_map = proxy_geo2d_map %>% 
+    proxy_geo2d_map = proxy_geo2d_map %>%
       addCircleMarkers(
         label =~paste0("name=",as.character(name)," ;z=",as.character(round(elv,0))),
         data=obs_points,
@@ -304,8 +304,8 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
         color = ~cs_pal(elv),
         stroke = FALSE,
         radius =6,
-        group="geomodel" 
-      ) 
+        group="geomodel"
+      )
   }
   return(proxy_geo2d_map)
 }
