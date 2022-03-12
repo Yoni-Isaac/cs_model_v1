@@ -347,7 +347,7 @@ extra4geo2d = function(geo2d_map, horizons_db_i,geomdl,obs_points,horizon_unit){
                        title = "Upper Layer [m amsl]",
                        position = "topright",
                        group="geo_upper") %>% 
-    addLayersControl(position = "topright", overlayGroups = c("geo_upper"))
+    addLayersControl(position = "topright", overlayGroups = c("geo_upper","cs_pnts"))
 return(proxy_geo2d_map)  
 }
 
