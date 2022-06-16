@@ -52,7 +52,7 @@ library(slickR)
 modeldialog_status="Inactive"
 `%notin%` <<- Negate(`%in%`)
 charts=NULL
-tor="w" # w for web ; t for test
+tor="t" # w for web ; t for test
 cs_id_i=1
 load_sub=ifelse(tor=="w",source,debugSource)
 
@@ -1177,6 +1177,20 @@ server <- function(input, output, session) {
       proxy_mainmap=add_element(main_map=proxy_basemap,
                                 ad_lyr=user_shp,
                                 type=input$additional_layers_type)
+    }
+    else if (any(str_detect(inFile$name,".csv")) & input$additional_layers_type=="Point infrastructure (csv)") { 
+      pnt_path <- reactive({input$additional_layers})
+      crs_id=subset(localtiles_df,country==input$country,crs)
+      user_df=read_csv(input$additional_layers$datapath)
+      # Check the CRS
+      if(max(user_df$X)<100){
+        user_shp <- st_as_sf(user_df,coords = c("X", "Y"),crs=4326)
+      } else {
+        user_shp <- st_as_sf(user_df,coords = c("X", "Y"),crs=crs_id$crs) %>%  st_transform(.,crs=4326)
+      }
+      proxy_mainmap=add_element(main_map=proxy_basemap,
+                                ad_lyr=user_shp,
+                                type=input$additional_layers_type)
     } else {
       # Inactive options
       showModal(
@@ -1747,7 +1761,7 @@ server <- function(input, output, session) {
                       choices = cs_ids$cs_id
     )
     
-    ### Map - Change base proxy map --------------------------------------------
+    ### Base Map - Change proxy map --------------------------------------------
     proxy_basemap=leafletProxy(
       mapId = "mainmap",
       session = session
@@ -1918,23 +1932,97 @@ server <- function(input, output, session) {
         footer = NULL
       )) 
     })
-    ## Set & Switch View =======================================================
+    ## Geo map - Set & Switch View =============================================
     # Set base 2D map
     if(is.null(c(geomdl,upper_rst, unit_bounds_st))==T){
-      output$geo2d_map <- renderLeaflet({
-        leaflet(options = leafletOptions(zoomControl = F)) %>% 
-          setView(lng=35.2,lat=32.55,zoom=10) %>%
-          addProviderTiles(providers$CartoDB.Positron) %>%
-          htmlwidgets::onRender("
+      if(is.null(horizons_db)==T){
+        ### Load clean map (CS_Grid not exist) ---------------------------------
+        output$geo2d_map <- renderLeaflet({
+          leaflet(options = leafletOptions(zoomControl = F)) %>% 
+            setView(lng=35.2,lat=32.55,zoom=10) %>%
+            addProviderTiles(providers$CartoDB.Positron) %>%
+            htmlwidgets::onRender("
                 function(el,x) {
                     geo2d_map = this;
                 }
             ")  %>%
-          htmlwidgets::onRender("function(el, x) {
+            htmlwidgets::onRender("function(el, x) {
                  L.control.zoom({ position: 'bottomright' }).addTo(this)}")
+          
+        }) 
+      } else {
+        ### Load  active map (CS_Grid exist) -----------------------------------
+        horizons_db_filtr=dplyr::filter(horizons_db, !is.na(Elevation) & Horizon %in% input$horizon_unit)
+        cs_pal <- colorNumeric(edited_palette, horizons_db_filtr$Elevation,na.color = "transparent")
+        
+        output$geo2d_map <- renderLeaflet({
+          leaflet(options = leafletOptions(zoomControl = F)) %>% 
+            setView(lng=35.2,lat=32.55,zoom=10) %>%
+            addCircleMarkers(
+              data=horizons_db_filtr,
+              label =~paste0("Id=",as.character(ID)," ;x=",as.character(round(Distance,0))," ;z=",as.character(round(Elevation,0))),
+              labelOptions=labelOptions(style = list(
+                "color" = "blue",
+                "font-family" = "serif",
+                "font-style" = "italic",
+                "box-shadow" = "3px 3px rgba(0,0,0,0.25)",
+                "font-size" = "15px",
+                "border-color" = "rgba(0,0,0,0.5)"
+              ),
+              maxWidth = 3000,
+              maxHeight = 3000,
+              zIndexOffset=Inf),
+              fillOpacity = 0.7,
+              color = ~cs_pal(Elevation),
+              stroke = FALSE,
+              radius =3,
+              group="cs_pnts"
+            ) %>% 
+          addProviderTiles(providers$CartoDB.Positron) %>%
+            htmlwidgets::onRender("
+                function(el,x) {
+                    geo2d_map = this;
+                }
+            ")  %>%
+            htmlwidgets::onRender("function(el, x) {
+                 L.control.zoom({ position: 'bottomright' }).addTo(this)}")
+          
+        }) 
+      }
+      ### Change active map  ---------------------------------------------------
+      observeEvent(input$horizon_unit,{
+        req(!is.null(horizons_db_filtr)==T)
+        horizons_db_filtr=dplyr::filter(horizons_db, !is.na(Elevation) & Horizon %in% input$horizon_unit)
+        cs_pal <- colorNumeric(edited_palette, horizons_db_filtr$Elevation,na.color = "transparent")
+        
+        proxy_geo2d_map=leafletProxy(
+          mapId = "geo2d_map",
+          session = session
+        ) %>%
+          clearGroup(group="cs_pnts") %>% 
+          addCircleMarkers(
+            data=horizons_db_filtr,
+            label =~paste0("Id=",as.character(ID)," ;x=",as.character(round(Distance,0))," ;z=",as.character(round(Elevation,0))),
+            labelOptions=labelOptions(style = list(
+              "color" = "blue",
+              "font-family" = "serif",
+              "font-style" = "italic",
+              "box-shadow" = "3px 3px rgba(0,0,0,0.25)",
+              "font-size" = "15px",
+              "border-color" = "rgba(0,0,0,0.5)"
+            ),
+            maxWidth = 3000,
+            maxHeight = 3000,
+            zIndexOffset=Inf),
+            fillOpacity = 0.7,
+            color = ~cs_pal(Elevation),
+            stroke = FALSE,
+            radius =3,
+            group="cs_pnts"
+          )
         
       })
-      
+      # Switch View 
       geo_dims_v=reactive({input$geo_dims})
       output$geo_view=renderUI({
         #req()
@@ -2488,11 +2576,11 @@ server <- function(input, output, session) {
       obs_rsq=round(rsq(intonobs$targ_elv,intonobs$int_elv),2) 
       obs_rmsd=round(bio3d::rmsd(intonobs$targ_elv,intonobs$int_elv),2)
       objval_df=data.frame(Name=c("OB's","CS's"),RSQ=c(obs_rsq,hor_rsq),RMSD=c(obs_rmsd,hor_rmsd))
-    
+      
       valid_C=valid_C+
         geom_point(data=intonobs,aes(x=targ_elv,y=int_elv,text =  paste("OB: ", name)),color="blue")
-      }
- 
+    }
+    
     valid_CI = ggplotly(valid_C)
     
     
