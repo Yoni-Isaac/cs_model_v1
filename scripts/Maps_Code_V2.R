@@ -41,7 +41,7 @@ wellsmap=function(CS_model_system,geogrid,transforms_shp,viewdif){
     setView(lng=as.numeric(viewdif[1]),lat=as.numeric(viewdif[2]),zoom=as.numeric(viewdif[3])) %>% 
     addProviderTiles(providers$CartoDB.Positron #,
                      #options = pathOptions(pane = "basesview")
-                     ) %>%
+    ) %>%
     addPolygons(data=geogrid,
                 group = "geology",
                 color= "black",
@@ -52,7 +52,7 @@ wellsmap=function(CS_model_system,geogrid,transforms_shp,viewdif){
                 dashArray='5,10',
                 smoothFactor = 1#,
                 #options = pathOptions(pane = "basesview")
-                ) %>%
+    ) %>%
     addLegend("topright",
               data=geogrid,
               #pal = gridpal,
@@ -78,7 +78,7 @@ wellsmap=function(CS_model_system,geogrid,transforms_shp,viewdif){
                      stroke = FALSE, fillOpacity = 0.99,
                      group = "wells" #,
                      #options = pathOptions(pane = "wellsview")
-                     ) %>%
+    ) %>%
     addLegend("topright",
               pal = pal,
               values = ~LEVEL_DES,
@@ -93,7 +93,7 @@ wellsmap=function(CS_model_system,geogrid,transforms_shp,viewdif){
                  opacity = 0.5,
                  smoothFactor = 0#,
                  #options = pathOptions(pane = "geoview")
-                 ) %>% 
+    ) %>% 
     addPmToolbar(
       toolbarOptions = pmToolbarOptions(drawMarker = T, position = "topleft"),
       drawOptions = pmDrawOptions(snappable = T,
@@ -135,7 +135,7 @@ wellsmap_n=function(CS_model_system,geogrid,transforms_shp,viewdif,localtiles_df
     addTiles(as.character(localtiles_dfs$pth),
              attribution = as.character(localtiles_dfs$att)#,
              #options = pathOptions(pane = "basesview")
-             ) %>% 
+    ) %>% 
     htmlwidgets::onRender("function(el, x) {
                  L.control.zoom({ position: 'topright' }).addTo(this)}") %>%
     addPolygons(data=geogrid,
@@ -148,7 +148,7 @@ wellsmap_n=function(CS_model_system,geogrid,transforms_shp,viewdif,localtiles_df
                 dashArray='5,10',
                 smoothFactor = 1#,
                 #options = pathOptions(pane = "basesview")
-                ) %>%
+    ) %>%
     addLegend("topright",
               data=geogrid,
               #pal = gridpal,
@@ -179,8 +179,8 @@ wellsmap_n=function(CS_model_system,geogrid,transforms_shp,viewdif,localtiles_df
                      color = ~pal(LEVEL_DES),
                      stroke = FALSE, fillOpacity = 0.99,
                      group = "wells"#,
-                    # options = pathOptions(pane = "wellsview")
-                    ) %>%
+                     # options = pathOptions(pane = "wellsview")
+    ) %>%
     addLegend("topright",
               pal = pal,
               values = ~LEVEL_DES,
@@ -195,7 +195,7 @@ wellsmap_n=function(CS_model_system,geogrid,transforms_shp,viewdif,localtiles_df
                  opacity = 0.5,
                  smoothFactor = 0#,
                  #options = pathOptions(pane = "geoview")#
-                 ) %>% 
+    ) %>% 
     addPmToolbar(
       toolbarOptions = pmToolbarOptions(drawMarker = T, position = "topleft"),
       drawOptions = pmDrawOptions(snappable = T,
@@ -229,9 +229,10 @@ wellsmap_n=function(CS_model_system,geogrid,transforms_shp,viewdif,localtiles_df
 # 3. Additional Layers #########################################################
 
 add_element=function(main_map,ad_lyr,type){
+  uni=st_union(ad_lyr)
+  cord=st_coordinates(st_centroid(uni))
   if (type=="Digital Terrain Model (contours)") {
-    uni=st_union(ad_lyr)
-    cord=st_coordinates(st_centroid(uni))
+    
     add_map=main_map %>% 
       clearGroup(group="usrelement") %>% 
       setView(lng=cord[1],lat=cord[2],zoom = 13) %>% 
@@ -239,19 +240,31 @@ add_element=function(main_map,ad_lyr,type){
                    color= "black",
                    smoothFactor = 1,
                    group="usrelement")
+  } else if (type=="Point infrastructure (csv)"){
+    add_map=main_map %>% 
+      clearGroup(group="usrelement") %>% 
+      setView(lng=cord[1],lat=cord[2],zoom = 13) %>% 
+      addCircleMarkers(data=ad_lyr,
+                   color= "black",
+                   label = ~name,
+                   labelOptions=labelOptions(textsize = "30px",
+                                             maxWidth = 3000,
+                                             maxHeight = 3000,
+                                             zIndexOffset=Inf),
+                   group="usrelement")
+    
   }
   return(add_map)
- } 
+} 
 
 # 4. 2D Geo Model ##############################################################
+edited_palette<<-c("#aeafb0","#a2cffc","#95b9de","#467bb3","#1adb9b","#1EDC66","#1EDC21","#0FA411",
+                 "#ACE409","#DDE409","#F5C907","#F59B07","#F56507","#DC5C47","#D82D12",
+                 "#D81254","#174182","#23539e","#722261","#260C21","#260C21","#260C21","#260C21",
+                 "#260C21","#260C21","#260C21","#260C21")
+
 ## 4.1 Simple 2D Geo map =======================================================  
 updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit){
-  
-  edited_palette=c("#aeafb0","#a2cffc","#95b9de","#467bb3","#1adb9b","#1EDC66","#1EDC21","#0FA411",
-                   "#ACE409","#DDE409","#F5C907","#F59B07","#F56507","#DC5C47","#D82D12",
-                   "#D81254","#174182","#23539e","#722261","#260C21","#260C21","#260C21","#260C21",
-                   "#260C21","#260C21","#260C21","#260C21")
-  
   cs_pal <- colorNumeric(edited_palette, horizons_db_i$Elevation,na.color = "transparent")
   
   Sys.sleep(10)
@@ -276,9 +289,9 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
         "font-size" = "15px",
         "border-color" = "rgba(0,0,0,0.5)"
       ),
-                                maxWidth = 3000,
-                                maxHeight = 3000,
-                                zIndexOffset=Inf),
+      maxWidth = 3000,
+      maxHeight = 3000,
+      zIndexOffset=Inf),
       fillOpacity = 0.7,
       color = ~cs_pal(Elevation),
       stroke = FALSE,
@@ -292,7 +305,7 @@ updt_geo2d_map = function(geo2d_map,horizons_db_i,geomdl,obs_points,horizon_unit
     leaflet::addLegend(pal = cs_pal, values = horizons_db_i$Elevation,position ="topright",
                        title = paste0(horizon_unit," [m amsl]"),
                        group="geomodel")
-
+  
   if(!is.null(obs_points)==T & nrow(obs_points)>0){
     #obs_points_st=st_as_sf(as_tibble(obs_pnt_df_grp), coords = c("lon", "lat"), crs = 4326,remove=F)
     proxy_geo2d_map = proxy_geo2d_map %>%
@@ -348,7 +361,7 @@ extra4geo2d = function(geo2d_map, horizons_db_i,geomdl,obs_points,horizon_unit){
                        position = "topright",
                        group="geo_upper") %>% 
     addLayersControl(position = "topright", overlayGroups = c("geo_upper","cs_pnts"))
-return(proxy_geo2d_map)  
+  return(proxy_geo2d_map)  
 }
 
 
