@@ -25,6 +25,7 @@ library(dplyr)
 library(readxl)
 library(googledrive)
 library(data.table)
+library(terra)
 library(raster)
 library(DT)
 library(stringr)
@@ -65,7 +66,7 @@ load_sub('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
 load_sub('scripts/CS_Model_Code_V41.R', encoding = 'UTF-8') #debugSource
 load_sub('scripts/Horizons_Model_Code_V9.R', encoding = 'UTF-8') #debugSource
 load_sub('scripts/Maps_Code_V2.R', encoding = 'UTF-8') #debugSource
-load_sub('scripts/Geology_Model_Code_V3.R', encoding = 'UTF-8') #debugSource
+load_sub('scripts/Geology_Model_Code_V4.R', encoding = 'UTF-8') #debugSource
 
 options(shiny.maxRequestSize = Inf)
 options(shiny.trace = F)
@@ -535,6 +536,17 @@ ui <- fluidPage(
                                                       style="color: #fff; background-color: #337ab7; border-color: #2e6da4",
                                                       width = "100px",
                                                       label = HTML("<span style='font-size:1.3em;'><br />Download Horizons</span>")
+                                       )
+                                     )
+                                   ),
+                                   # Classifier - Download Raw Horizon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                                   fluidRow(
+                                     shinyjs::hidden(
+                                       downloadButton("download_raw_horizon",
+                                                      icon = icon("accusoft"),
+                                                      style="color: #fff; background-color: #758b9e; border-color: #727475",
+                                                      width = "100px",
+                                                      label = HTML("<span style='font-size:1.3em;'><br />Download Raw Horizons</span>")
                                        )
                                      )
                                    )
@@ -1308,7 +1320,7 @@ server <- function(input, output, session) {
   
   # Create Virtual Wells ----------------------------------------------------------------
   Virtual_cre=observeEvent(input$mainmap_draw_new_feature,{
-    req(input$mainmap_draw_stop)
+    req(input$mainmap_click)
     feature_type <- input$mainmap_draw_new_feature$geometry$type
     
     if(feature_type=="Point") {
@@ -1493,11 +1505,25 @@ server <- function(input, output, session) {
       dlt_optn="active"
     })
     
-    ### Update Selection list --------------------------------------------------
+    
     observeEvent({input$tabs
       input$Select_horizon_by},{
         req(input$tabs == "Build Horizons")
         req(is.null(charts)!=T)
+        
+        ### Open option to download raw horizons -------------------------------
+        if(input$Select_horizon_by=="Hydrogeology libraries" & nrow(charts$cs_data$DEM_plot_df)>0){
+          shinyjs::show("download_raw_horizon")
+          horizons_raw_db=subset(charts$cs_data$DEM_plot_df,,c("Distance","Longitude","Latitude","Elevation","Unit Name")) %>% 
+            dplyr::rename(Horizon=`Unit Name`) %>% 
+            mutate(method="Source",ID=paste0(as.character(charts$cs_data$cs_id),as.character(charts$cs_data$cs_id),"'")) %>% 
+            na.omit(.)
+          if(nrow(horizons_db)>0){
+            horizons_raw_db=rbind(horizons_db,horizons_raw_db)
+          }
+        }
+        
+        ### Update Selection list ----------------------------------------------
         message("Update Selection list")
         
         if(input$Select_horizon_by=="Wells"){
@@ -1677,7 +1703,7 @@ server <- function(input, output, session) {
   })
   
   ## Export Products =========================================================
-  ### Set Download button ----------------------------------------------------
+  ### Set Download buttons ----------------------------------------------------
   output$download_horizon <-downloadHandler(
     message("Download Horizons"),
     filename = function() { 
@@ -1688,6 +1714,15 @@ server <- function(input, output, session) {
     }
   )
   
+  output$download_raw_horizon <-downloadHandler(
+    message("Download Raw Horizons"),
+    filename = function() { 
+      paste(out_h_nme,paste0(as.character(charts$cs_data$cs_id),as.character(charts$cs_data$cs_id),"'-"), Sys.Date(), ".csv", sep="")
+    },
+    content = function(file) {
+      write.csv(horizons_raw_db,file, row.names = F)
+    }
+  )
   
   ### Add to Data Base -------------------------------------------------------
   observeEvent(input$add2hdb,{
@@ -1732,12 +1767,29 @@ server <- function(input, output, session) {
   ### Set reactive connection --------------------------------------------------
   horizons_rct <- reactive({ 
     req(input$csgrid) 
-    csFile=input$csgrid 
-    df=fread(csFile$datapath,
-             colClasses=c(Distance="numeric",	Longitude="numeric",	Latitude="numeric",	Elevation="numeric",
-                          Horizon="character",	method="character",	ID="character")) %>% 
-      dplyr::distinct(.,ID,Distance,Horizon,.keep_all = TRUE)
-    return(df)
+    csFile=input$csgrid
+    dfcolnames=c("Distance","Longitude","Latitude","Elevation","Horizon","method","ID")
+    # Check inputs
+    tst_df=read.table(csFile$datapath,header = T,nrows = 1, sep = ",")
+    colnames(tst_df)
+ 
+    if(all(dfcolnames %in% colnames(tst_df))==T){
+      df=fread(csFile$datapath,
+               colClasses=c(Distance="numeric",	Longitude="numeric",	Latitude="numeric",	Elevation="numeric",
+                            Horizon="character",	method="character",	ID="character")) %>% 
+        dplyr::distinct(.,ID,Distance,Horizon,.keep_all = TRUE)
+    } else{
+      df=NULL
+      cols=c("Distance","Longitude","Latitude","Elevation","Horizon","method","ID")
+      messeges_str=paste0("Check that you have entered a database that includes the following seven fields: Distance|Longitude|Latitude|Elevation|Horizon|method|ID")
+      showModal(modalDialog(
+        title = "There seems to be some issues with the data you entered: ",
+        messeges_str,
+        easyClose = TRUE,
+        footer = NULL
+      ))
+    }
+     return(df)
   })
   
   observeEvent(input$csgrid,{
@@ -1978,7 +2030,7 @@ server <- function(input, output, session) {
               radius =3,
               group="cs_pnts"
             ) %>% 
-          addProviderTiles(providers$CartoDB.Positron) %>%
+            addProviderTiles(providers$CartoDB.Positron) %>%
             htmlwidgets::onRender("
                 function(el,x) {
                     geo2d_map = this;
