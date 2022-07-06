@@ -20,25 +20,25 @@ if(Type_of_runing=="u_t"){
   # CSMS Moac Parameters - Ran as Script =======================================
   Background_path="G:/Geohydrology"
   basemap_pth=paste0("data/Background_layers/BaseMaps/")
-  horizons_db_i=read.csv("G:/Geohydrology/Models/EastMt/CS_lines/judea_all_units_V8.csv")
+  horizons_db_i=read.csv("G:/Geohydrology/Models/SorekRefaem/data/ANA/GDB/Tebular/Fixed_CS-SS'-2022-06-30.csv")
   notincluded=NULL#"GG'"
-  surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_st.shp")
+  surface_unit_st=st_read("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/surface_unit_KefarShaul_st.shp")
   country="Israel"
   grid_reso=0.01
-  obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u_judeaUP.csv")
+  obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u_KefarShaul_st.csv")
   obs_inclod=F
-  unit_bounds_st=st_read("G:/Geohydrology/Models/EastMt/UGRID_SHAPE/4-judeaUP_polys.shp") %>% st_transform(.,crs = 4326) 
-  geology_blocks_st=sf::st_read(paste0(Background_path,"/Apps/External_Data/Geology_Model_Moac_Elements/Active_F_EastMt.shp")) %>% st_transform(.,crs = 4326)
+  unit_bounds_st=st_read("G:/Geohydrology/Models/SorekRefaem/data/ANA/GDB/Features/UnitsBounds/KefarShaul_V3.shp") %>% st_transform(.,crs = 4326) 
+  geology_blocks_st=sf::st_read("G:/Geohydrology/Models/SorekRefaem/data/ANA/GDB/Features/suboundray_V4_bof.shp") %>% st_transform(.,crs = 4326)
   #
-  algorithm_s="Kriging"
-  ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3)
+  # algorithm_s="Kriging"
+  # ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3)
   # algorithm_s="Random Forests",
   # ap_lst=list(rf_normalize=T, trees_n=1000,mtry=100),
   # algorithm_s="Neural Networks",
   # ap_lst=list(layers_rng=c(10,200), layers_n=2)#,
-  # algorithm_s="Support Vector Machine"
-  # ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
-  upper_layer=raster("G:/Geohydrology/Apps/CS_Model_V02/data/DEMs/north_eastren_alluvium_Base.tif")
+  algorithm_s="Support Vector Machine"
+  ap_lst=list(svm_typ="eps-bsvr", kernel= "polydot", svmc_v=25)
+  upper_layer=NULL# raster("G:/Geohydrology/Apps/CS_Model_V02/data/DEMs/north_eastren_alluvium_Base.tif")
   rst_cutter=5
   dtm_not2cut=F
   
@@ -140,6 +140,29 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
     }
     
   }
+  
+  # Edit 02072022 S################
+  if(!is.null(geology_blocks_st)==T){
+    message("2.2 Sub Boundary")
+    geology_blocks_st=rownames_to_column(geology_blocks_st,var="geoblock_id")
+    horizons_db_pnt=st_join(horizons_db_pnt,subset(geology_blocks_st,,c("geoblock_id")),st_intersects,left=T)
+    checkpnt= st_drop_geometry(horizons_db_pnt) %>% group_by(geoblock_id) %>% dplyr::summarise(n=n())
+    
+    # Check that there are enough points in each geological block
+    if(any(checkpnt$n)<1000){
+      messeges_str="At least one of the geological blocks has too few points to perform the interpolation,
+      please check the map and add points as needed."
+      showModal(modalDialog(
+        title = "Data warning: ",
+        messeges_str,
+        easyClose = TRUE,
+        footer = NULL
+      )) 
+    }
+  }
+  # Edit 02072022 E################
+  
+  
   # 4. Build Grid ##############################################################
   message("4. Build Grid")
   raw_grid=raster(extent(work_zone_sp), resolution = c(grid_reso,grid_reso),
@@ -344,10 +367,10 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
       o
     }
     kriged=crs_kriging(as.numeric(xyz$X), as.numeric(xyz$Y), as.numeric(xyz$Z),
-                            polygons=seg_lst,
-                            model=ap_lst$kriging_mdl,
-                            pixels=ap_lst$kriging_pxl,
-                            lags=ap_lst$kriging_lags)
+                       polygons=seg_lst,
+                       model=ap_lst$kriging_mdl,
+                       pixels=ap_lst$kriging_pxl,
+                       lags=ap_lst$kriging_lags)
     krig_df=kriged[["map"]] %>%
       transmute(z=pred,
                 lon=x,

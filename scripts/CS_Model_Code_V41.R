@@ -39,7 +39,7 @@ cs_model=function(in_param)
     Geology_Descriptions_slc=read.csv(paste0(Background_path,'/Apps/External_Data/Geology_Descriptions_slc.csv')) %>% as.data.table(.,key="well_id")#  Local Test file
     transforms_st=read.csv(paste0(Background_path,'/Apps/External_Data/transforms.csv'))
     season="Summer-Autumn"
-    measurement_year=FALSE # 2018 # FALSE
+    measurement_year=1970 # 2018 # FALSE
     title_CS="Test CS"
     cs_id="A"
     well_id="shd_id"
@@ -56,7 +56,7 @@ cs_model=function(in_param)
     DEM_line_thickness=0.2
     Save_as_PowerPoint=paste0(Background_path,'/CS_Model_V01/Products/hydrology_cs.pptx')
     Use_tamplate =F
-    Background=as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_NES.csv'))$V1) ;str_i=1 #NULL #
+    Background=NULL #as.character(read.csv(paste0(Background_path,'/Apps/External_Data/Background_nat_ES.csv'))$V1) ;str_i=1 #NULL #
     geological_cs_surf="geomap"# geomap # "geomap_free_colors" # "blind"
     country="Israel" # "Indefinite"
     geology_200=sf::st_read(paste0("data/Background_layers/BaseMaps/","geology_200_V4.shp"))
