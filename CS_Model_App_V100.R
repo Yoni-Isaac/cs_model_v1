@@ -2605,8 +2605,7 @@ server <- function(input, output, session) {
       )
     })
     
-    # Edit 04032022 S############
-    ## Validation ==============================================================
+     ## Validation ==============================================================
     rsq <- function (x, y) cor(x, y, use = "complete") ^ 2
     ### CS's -------------------------------------------------------------------
     horizons_db4val= st_as_sf(horizons_db4map,coords=c("Longitude","Latitude"),crs=4326)
@@ -2643,7 +2642,6 @@ server <- function(input, output, session) {
       objval_df
     })
     
-    # Edit 04032022 E############
   })
   
   ## Export Model ==============================================================
@@ -2651,8 +2649,9 @@ server <- function(input, output, session) {
   output$rgm_download <-  downloadHandler(
     message("Download Geology Model"),
     filename = function() { 
-      paste("Geology Model_", Sys.Date(), ".html", sep=""
-      )
+      exprt_s=paste(input$horizon_unit,input$horizon_type,Sys.Date(), sep="_") # General export name
+      paste0(exprt_s, ".html")
+      
     },
     content = function(file) {
       htmlwidgets::saveWidget(geo2d_map_full,selfcontained = T, file=file)
@@ -2662,9 +2661,9 @@ server <- function(input, output, session) {
   ### Raster -------------------------------------------------------------------
   output$dnl2rst <-  downloadHandler(
     message("Download Geology Model"),
-    filename = function() { 
-      paste("Geology Model_", Sys.Date(), ".tif", sep=""
-      )
+    filename = function() {
+      exprt_s=paste(input$horizon_unit,input$horizon_type,Sys.Date(), sep="_") # General export name
+      paste0(exprt_s, ".tif")
     },
     content = function(file) {
       if(input$country!="Indefinite"){
@@ -2707,8 +2706,8 @@ server <- function(input, output, session) {
   output$dnl2grid <-  downloadHandler(
     message("Download Geology Model"),
     filename = function() { 
-      paste("Geology Model_", Sys.Date(), ".csv", sep=""
-      )
+      exprt_s=paste(input$horizon_unit,input$horizon_type,Sys.Date(), sep="_") # General export name
+      paste0(exprt_s, ".csv", sep="")
     },
     content = function(file) {
       # XYZ Grid ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2748,8 +2747,8 @@ server <- function(input, output, session) {
   output$dnl2cont <-  downloadHandler(
     message("Download Geology Model"),
     filename = function() { 
-      paste("Geology Model_", Sys.Date(), ".csv", sep=""
-      )
+      exprt_s=paste(input$horizon_unit,input$horizon_type,Sys.Date(), sep="_") # General export name
+      paste0(exprt_s, ".csv")
     },
     content = function(file) {
       sf::st_write(geomdl$cont, dsn=file ,delete_dsn=T,
