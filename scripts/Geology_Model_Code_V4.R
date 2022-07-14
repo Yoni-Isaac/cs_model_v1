@@ -29,7 +29,7 @@ if(Type_of_runing=="u_t"){
   obs_points_u=read.csv("G:/Geohydrology/Apps/External_Data/Geology_Model_Moac_Elements/obs_points_u_KefarShaul_st.csv")
   obs_inclod=F
   unit_bounds_st=st_read("G:/Geohydrology/Models/SorekRefaem/data/ANA/GDB/Features/UnitsBounds/KefarShaul_V3.shp") %>% st_transform(.,crs = 4326) 
-  geology_blocks_st=sf::st_read("G:/Geohydrology/Models/SorekRefaem/data/ANA/GDB/Features/suboundray_V4_bof.shp") %>% st_transform(.,crs = 4326)
+  geology_blocks_st=sf::st_read("G:/Geohydrology/Models/SorekRefaem/data/ANA/GDB/Features/suboundray_V5.shp") %>% st_transform(.,crs = 4326)
   #
   # algorithm_s="Kriging"
   # ap_lst=list(kriging_mdl="spherical", kriging_pxl=300, kriging_lags=3)
@@ -108,7 +108,6 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
     message("2.2 Sub Boundaries")
     geology_blocks_st=rownames_to_column(geology_blocks_st,var="geoblock_id") 
     work_zone= st_intersection(geology_blocks_st,work_zone)
-    plot(work_zone)
   } else {
     work_zone$geoblock_id=1
   }
@@ -117,7 +116,10 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   message("3. Set Elevations")
   ## 3.1 Surface Elevation =====================================================
   dem_pth = "data/DEMs"
-  work_zone_sp=sf::as_Spatial(st_zm(work_zone, drop = TRUE, what = "ZM"))
+  work_zone_sp=work_zone %>% mutate(type=st_geometry_type(geometry)) %>%
+    dplyr::filter(type!="GEOMETRYCOLLECTION") %>% 
+    st_union(.) %>% as_Spatial(.)
+  
   if(country=="Israel"){
     DTM_rst=raster::crop(raster(paste0(dem_pth,"/DTM.tif")),work_zone_sp)
   } else if (exists("DTM_rst",where=additional_layers_lst)==T) {
@@ -154,11 +156,12 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   ### 4.1.1 Split DB to blocks -------------------------------------------------
   if(!is.null(geology_blocks_st)==T){
     message("4.1 Geo blocks (Sub-boundaries)")
+    if(obs_inclod==T){horizons_db_pnt=dplyr::select(horizons_db_pnt,-geoblock_id)}
     horizons_db_pnt=st_join(horizons_db_pnt,subset(geology_blocks_st,,c("geoblock_id")),st_intersects,left=T)
     checkpnt= st_drop_geometry(horizons_db_pnt) %>% group_by(geoblock_id) %>% dplyr::summarise(n=n())
     
     # Check that there are enough points in each geological block
-    if(any(checkpnt$n)<1000){
+    if(any(checkpnt$n)<10){
       messeges_str="At least one of the geological blocks has too few points to perform the interpolation,
       please check the map and add points as needed."
       showModal(modalDialog(
@@ -174,13 +177,16 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   ### 4.1.2 Ran Model Throw blocks ---------------------------------------------
   int_lst=list()
   for(i in 1:max(work_zone$geoblock_id,na.rm = T)){
-    check_zone_i=dplyr::filter(work_zone,geoblock_id==i)
+    geoclass=function(x){class(x)[3]}
+    check_zone_i=dplyr::filter(work_zone,geoblock_id==i) 
     check_db_pnt_i=dplyr::filter(horizons_db_pnt,geoblock_id==i)
-    if (nrow(check_zone_i)>0 & nrow(horizons_db_pnt_i)>0){
-      work_zone_i=check_zone_i
+    print(paste0("geozon ",i))
+    if (nrow(check_zone_i)>0 & nrow(check_db_pnt_i)>0){
+      work_zone_i=check_zone_i %>% mutate(type=st_geometry_type(geometry)) %>%
+        dplyr::filter(type!="GEOMETRYCOLLECTION") %>% 
+        st_union(.)
       horizons_db_pnt_i=check_db_pnt_i
-      work_zone_sp_i=sf::as_Spatial(st_zm(work_zone_i, drop = TRUE, what = "ZM"))
-      
+      work_zone_sp_i=sf::as_Spatial(work_zone_i)
       ## 4.2 Build Grid ============================================================
       message("4.2 Build Grid")
       raw_grid=raster(extent(work_zone_sp_i), resolution = c(grid_reso,grid_reso),
@@ -566,10 +572,21 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   
   # 6.Post Processing ##########################################################
   message("6.Post Processing")
+  
   ## 6.1 Combine interpolation elements ========================================
-  tra_lst=lapply(int_lst,FUN = rast)
+  # int_lstcln = int_lst[-which(sapply(int_lst, is.null))] 
+  int_lstcln=list()
+  k=1
+  for (i in 1:length(int_lst)){
+    if(!is.null(int_lst[[i]])==T){
+      int_lstcln[[k]]=int_lst[[i]]
+      k=k+1
+    }
+  }
+  
+  tra_lst=lapply(int_lstcln,FUN = rast)
   int = raster(mosaic(terra::src(tra_lst)))
-
+  
   ## 6.2 Increase Resolution ===================================================
   ss <- raster(resolution=c(grid_reso*0.1,grid_reso*0.1), crs=proj4string(int), ext=extent(int)) 
   int4export <- resample(int, ss)
@@ -577,11 +594,13 @@ line2horizon = function(horizons_db_i,notincluded,surface_unit_st,
   ## 6.3 Cut with uppers =======================================================
   ### 6.3.1 Outcrops (surface Unit) --------------------------------------------
   if(!is.null(surface_unit_st)==T){
-    DTM_outcrops=raster::mask(crop(DTM_rst,surface_unit_st),surface_unit_st)
-    DTM_outcrops_rs=resample(DTM_outcrops, ss)
-    int4export=raster::mosaic(DTM_outcrops_rs,int4export,fun=max)
-    if(!is.null(unit_bounds_st)==T){
-      int4export=raster::mask(crop(int4export,unit_bounds_st),unit_bounds_st)
+    DTM_outcrops=try(raster::mask(crop(DTM_rst,surface_unit_st),surface_unit_st))
+    if(class(DTM_outcrops)!="try-error"){
+      DTM_outcrops_rs=resample(DTM_outcrops, ss)
+      int4export=raster::mosaic(DTM_outcrops_rs,int4export,fun=max)
+      if(!is.null(unit_bounds_st)==T){
+        int4export=raster::mask(crop(int4export,unit_bounds_st),unit_bounds_st)
+      }
     }
   }
   
