@@ -53,7 +53,7 @@ library(slickR)
 modeldialog_status="Inactive"
 `%notin%` <<- Negate(`%in%`)
 charts=NULL
-tor="t" # w for web ; t for test
+tor="w" # w for web ; t for test
 cs_id_i=1
 load_sub=ifelse(tor=="w",source,debugSource)
 
@@ -261,7 +261,7 @@ ui <- fluidPage(
                         type="image/png" />'))),
   div(style="padding: 1px 0px; width: '100%'",
       titlePanel(
-        title="", windowTitle="CSMS 2.2.1"
+        title="", windowTitle="CSMS 2.3.1"
       )
   ),
   
@@ -284,7 +284,7 @@ ui <- fluidPage(
                           ),
                           style = "position:absolute;right:2em;"),
                           HTML("<div style='vertical-align:middle; text-align:center'> 
-                                  <img src='app_panel_221.jpg' width='1400' height='500' alt='This is alternate text'></img>
+                                  <img src='app_panel_231.jpg' width='1400' height='500' alt='This is alternate text'></img>
                              </div>"),
                           HTML("<div style='vertical-align:middle; text-align:center'> 
                                   <h2 style='text-align:middle;'>Welcome to CSMS<sup>®</sup> Software, Explore & Analysis your deep data.</h2>
@@ -2649,7 +2649,7 @@ server <- function(input, output, session) {
   output$rgm_download <-  downloadHandler(
     message("Download Geology Model"),
     filename = function() { 
-      exprt_s=paste(input$horizon_unit,input$horizon_type,Sys.Date(), sep="_") # General export name
+      exprt_s=paste(input$horizon_unit,Sys.Date(), sep="_") # General export name
       paste0(exprt_s, ".html")
       
     },
@@ -2662,7 +2662,7 @@ server <- function(input, output, session) {
   output$dnl2rst <-  downloadHandler(
     message("Download Geology Model"),
     filename = function() {
-      exprt_s=paste(input$horizon_unit,input$horizon_type,Sys.Date(), sep="_") # General export name
+      exprt_s=paste(input$horizon_unit,Sys.Date(), sep="_") # General export name
       paste0(exprt_s, ".tif")
     },
     content = function(file) {
@@ -2706,7 +2706,7 @@ server <- function(input, output, session) {
   output$dnl2grid <-  downloadHandler(
     message("Download Geology Model"),
     filename = function() { 
-      exprt_s=paste(input$horizon_unit,input$horizon_type,Sys.Date(), sep="_") # General export name
+      exprt_s=paste(input$horizon_unit,Sys.Date(), sep="_") # General export name
       paste0(exprt_s, ".csv", sep="")
     },
     content = function(file) {
@@ -2747,7 +2747,7 @@ server <- function(input, output, session) {
   output$dnl2cont <-  downloadHandler(
     message("Download Geology Model"),
     filename = function() { 
-      exprt_s=paste(input$horizon_unit,input$horizon_type,Sys.Date(), sep="_") # General export name
+      exprt_s=paste(input$horizon_unit,Sys.Date(), sep="_") # General export name
       paste0(exprt_s, ".csv")
     },
     content = function(file) {
