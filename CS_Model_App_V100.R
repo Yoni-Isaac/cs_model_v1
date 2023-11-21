@@ -48,19 +48,21 @@ library(shinyWidgets)
 library(cowplot)
 library(magick)
 library(slickR)
+library(RANN)
+library(reshape2)
 
 ## Global Variables ============================================================
 modeldialog_status="Inactive"
 `%notin%` <<- Negate(`%in%`)
 charts=NULL
-tor="w" # w for web ; t for test
+tor="t" # w for web ; t for test
 cs_id_i=1
 load_sub=ifelse(tor=="w",source,debugSource)
 
 ## Source ======================================================================
 message("Source Tools Scrips and functions")
 
-Background_path="G:/Geohydrology" # %%%%%% Change while moved to unplugged  %%%%
+Background_path="G:/" # %%%%%% Change while moved to unplugged  %%%%
 # Prodact_path=paste0(Background_path,"/Geohydrology/Apps/CS_Model_V01/Products")
 load_sub('scripts/Geohydrology_Functions_V2.R', encoding = 'UTF-8')
 load_sub('scripts/CS_Model_Code_V41.R', encoding = 'UTF-8') #debugSource
@@ -1514,11 +1516,11 @@ server <- function(input, output, session) {
         ### Open option to download raw horizons -------------------------------
         if(input$Select_horizon_by=="Hydrogeology libraries" & nrow(charts$cs_data$DEM_plot_df)>0){
           shinyjs::show("download_raw_horizon")
-          horizons_raw_db=subset(charts$cs_data$DEM_plot_df,,c("Distance","Longitude","Latitude","Elevation","Unit Name")) %>% 
+          horizons_raw_db<<-subset(charts$cs_data$DEM_plot_df,,c("Distance","Longitude","Latitude","Elevation","Unit Name")) %>% 
             dplyr::rename(Horizon=`Unit Name`) %>% 
             mutate(method="Source",ID=paste0(as.character(charts$cs_data$cs_id),as.character(charts$cs_data$cs_id),"'")) %>% 
             na.omit(.)
-          if(nrow(horizons_db)>0){
+          if(is.null(horizons_db)!=T){
             horizons_raw_db=rbind(horizons_db,horizons_raw_db)
           }
         }
