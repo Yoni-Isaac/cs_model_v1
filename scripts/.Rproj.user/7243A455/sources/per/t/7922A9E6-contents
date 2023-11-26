@@ -1,0 +1,310 @@
+rm(list=ls())
+library(shiny)
+library(leaflet)
+library(leaflet.extras)
+library(sp)
+library(sf)
+library(maptools)
+library(rgeos)
+library(rgdal)
+library(dplyr)
+library(readxl)
+library(googledrive)
+library(data.table)
+library(raster)
+library(DT)
+
+################## App Diectory ########################
+# G:\Layers\Geohydrology\Geohydrology\Apps\CS_Model_V01
+################## App Diectory ########################
+
+Background_path="G:/Layers/Geohydrology"
+Prodact_path=paste0(Background_path,"/Geohydrology/Apps/CS_Model_V01/Products")
+print(getwd())
+
+# Get Base Layers ==============================================================================
+# Local Path -----------------------------------------------------------------------------------
+proj4string="++proj=tmerc +lat_0=31.73439361111111 +lon_0=35.20451694444445 +k=1.0000067 +x_0=219529.584 +y_0=626907.39 +ellps=GRS80 +units=m +no_defs" # set it to UTM
+# CS_wells_pth=paste0(Background_path,"/CS_Model_V01/CS_layers/Geology_Description_v_28042020.shp") # Geology_Description_Test_Arava
+# CS_wells_xy=sf::as_Spatial(st_read(CS_wells_pth))
+# transforms_pth=paste0(Background_path,'/CS_Model_V01/Code/Tests_Elements/TJ_Faults_Test.shp')
+# transforms_df <- readOGR(transforms_pth) %>% as.data.frame(.) %>% subset(.,,"ObjectID")
+# basemap_pth=paste(Background_path,"Geohydrology/Apps/CS_Model_V01/www/geo_uni_clip_V2.tif",sep = "/")
+
+# Get Web Layers -------------------------------------------------------------------------------
+googledrive::drive_auth(email = "yoniizhak@gmail.com")
+# Wells ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+CS_wells_loc="https://drive.google.com/file/d/1c7cY3BwM-LdznHfZB6ynNKXvwG6mUniu/view?usp=sharing"
+CS_wells_pth="1c7cY3BwM-LdznHfZB6ynNKXvwG6mUniu"
+temp <- tempfile(fileext = ".zip")
+dl <- drive_download(
+  as_id(CS_wells_pth), path = temp, overwrite = TRUE)
+out <- unzip(temp, exdir = tempdir())
+CS_wells_xy=sf::as_Spatial(st_read(out[6]))
+# Faluts ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+transforms_loc="https://drive.google.com/file/d/1xo0jgZuSEM85oMus5mVptZxrfTiC10sd/view?usp=sharing"
+transforms_pth="1xo0jgZuSEM85oMus5mVptZxrfTiC10sd"
+temp <- tempfile(fileext = ".zip")
+dl <- googledrive::drive_download(
+  as_id(transforms_pth), path = temp, overwrite = TRUE)
+out <- unzip(temp, exdir = tempdir())
+transforms_shp <- readOGR(out[6])
+# Geology -Base map ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# basemap__loc="https://drive.google.com/file/d/11h9dJD-tD25mMY0r84qd0X6z1tBIA_7u/view?usp=sharing"
+# basemap_pth="11h9dJD-tD25mMY0r84qd0X6z1tBIA_7u"
+# temp <- tempfile(fileext = ".zip")
+# dl <- drive_download(
+#   as_id(basemap_pth), path = temp, overwrite = TRUE)
+# out <- unzip(temp, exdir = tempdir())
+# basemap_rs <- brick(out[2])
+
+# Set Base Lyers ===============================================================================
+# Wells Geology Description 
+CS_wells_ll = spTransform(CS_wells_xy, CRS("+proj=longlat +datum=WGS84")) 
+CS_wells=data.frame(Longitude=CS_wells_ll@coords[,1],Latitude=CS_wells_ll@coords[,2],name=CS_wells_ll$name,LEVEL_DES=CS_wells_ll$LEVEL_DES)
+CS_wells_coordinates=SpatialPointsDataFrame(CS_wells[,c("Longitude","Latitude")],CS_wells)
+# Create a palette that maps factor levels to colors
+pal <- colorFactor(c("blue","navy","green","sienna","red","red4"),
+                   domain = c("Full_Description", "Stratigraphic_Formations","Stratigraphic_Groups","Lithology","No_Description","Partly_Log_Description"))
+# TJ Faluts 
+transforms_ll = spTransform(transforms_shp, CRS("+proj=longlat +datum=WGS84")) 
+transforms_polygon <- gBuffer(transforms_ll, width=0.001, byid=F)
+crs(transforms_polygon) <- sp::CRS("+proj=longlat +datum=WGS84")
+
+# Geology -Base map
+basemap_pth=paste0("data/Background_layers/Geology_Maps","/geo_uni_clip_V2.tif")
+basemap_rs <- raster::brick(basemap_pth)
+crs(basemap_rs) <- sp::CRS(proj4string)
+basemap_rgb=mapview::viewRGB(basemap_rs,
+                             r = 1, g = 2, b = 3,
+                             maxpixels = 5*10^1,
+                             layer.name="Geology")
+print("A")
+# Run App ######################################################################################
+# UI ===========================================================================================
+ui <- fluidPage(
+  # App title 
+  titlePanel("Cross Section Model System - Version 1.1"),
+  # Sidebar layout with input and output definitions ----
+  sidebarLayout(
+    
+    # Sidebar panel for inputs ----
+    sidebarPanel(
+      # 0. Initiation ##########################################################################
+      tags$head(tags$script(src = "message-handler.js")),
+      actionButton("Get", "Get!"),
+      # Title ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      textInput("title_CS", "Title:",value="Test CS"),
+      # ID ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      textInput("cs_id", "Cross Section ID:",value="A"),
+      # Cross Section Type ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      radioButtons(inputId="CS_type",label= "Cross Section Type:",
+                   choices=c("Groups" = "groups",
+                             "Formations" = "formations",
+                             "Matirals" = "matirals"),
+                   tableOutput("CS_type")),
+      # Season ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      textInput("season", "Water Level Season:", value="w"),
+      # Measurement Year ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("measurement_year", "Measurement Year:",
+                   min = 1970, max = 2020, value = 2015,step=1),
+      # Transforms ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      #checkboxInput("transforms","Transforms:",value = T),
+      # Projection Line ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      checkboxInput("Projection_Line","Projection Line:",value = F),
+      # label_size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("label_size", "Label Size:",
+                   min = 10, max = 60, value = 30,step=10),
+      # Interval_between_labeles ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("Interval_between_labeles", "Labeles Interval:",
+                   min = 50, max = 400, value = 200,step=10),
+      # Lower Limit ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("Lower_Limit", "Lower Limit:",
+                   min = -4000, max = 0, value = -1000,step=100),
+      # Surface Smooth ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("Surface_Smooth", "Surface Smooth:",
+                   min = 0, max = 2, value = 0,step=0.1),
+      # DEM Line Thickness ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      numericInput("DEM_line_thickness", "DEM Line Thickness:",
+                   min = 0, max = 2, value = 1,step=0.1),
+      # CS Tamplate ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      checkboxInput("Use_tamplate","CS Tamplate:",value = T),
+      
+      # Dynamic Background ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      textInput("Dynamic_Background", "Dynamic Background:",
+                value=paste0(Background_path,'/CS_Model_V01/Background_layers/DEMs/DEMs_dynamic')),
+      
+      # Dynamic_Background_Base_layer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      textInput("Dynamic_Background_Base_layer", "Dynamic - Base Layer:",
+                value=paste0(Background_path,'/CS_Model_V01/Background_layers/DEMs/YAKENI_top.tif')),
+      # Virtual_Wells ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      textInput("Virtual_Wells","Virtual Wells:",value = FALSE),
+      # Export_Path ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      textInput("Export_Path","Export Path:",value = Prodact_path)
+      
+    ),
+    
+    # Main panel for displaying outputs ----
+    mainPanel(
+      div(
+        tabsetPanel(type = "tabs",
+                    tabPanel("Main Map",leafletOutput("mainmap",height = "1000px",width = "600px")),
+                    tabPanel("Wells Meta Data",tableOutput("CS_model_system")),
+                    tabPanel("Cross Section", plotOutput("cs_chart")) # ,height = "600px",width = "500px"
+        ),
+        class="span7")
+      
+    )
+  )
+)
+
+# Serever ======================================================================================
+server <- function(input, output, session) {
+  # Rander Main Map ----------------------------------------------------------------------------
+  output$mainmap <- renderLeaflet({
+    leaflet() %>% #basemap_rgb@map %>%
+      setView(lng=35,lat=31.1,zoom=10) %>%  # 7.9
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      addCircleMarkers(
+        data=CS_wells,lat=~Latitude,lng=~Longitude,label=~name,
+        radius = ~ifelse(LEVEL_DES == "Lithology", 2, 3),
+        color = ~pal(LEVEL_DES),
+        stroke = FALSE, fillOpacity = 0.99
+      ) %>%
+      addPolylines(data=transforms_ll,label=~ObjectID,
+                   color = "#444444",
+                   weight = 1, 
+                   smoothFactor = 0.5) %>%
+      addDrawToolbar(
+        targetGroup='draw',
+        polylineOptions=TRUE,
+        markerOptions = TRUE,
+        circleOptions = TRUE)  %>%
+      addLayersControl(overlayGroups = c('draw'), options =
+                         layersControlOptions(collapsed=FALSE)) 
+  })
+  # Rander Wells & Faluts List --------------------------------------------------------------------
+  output$CS_model_system <- renderTable({
+    # use the draw_stop event to detect when users finished drawing ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    req(input$mainmap_draw_stop)
+    print(input$mainmap_draw_new_feature)
+    feature_type <- input$mainmap_draw_new_feature$properties$feature_type
+    
+    # Select by Polygon ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if(feature_type %in% c("rectangle","polygon")) {
+      
+      #get the coordinates of the polygon
+      polygon_coordinates <- input$mainmap_draw_new_feature$geometry$coordinates[[1]]
+      
+      #transform them to an sp Polygon
+      drawn_polygon <- Polygon(do.call(rbind,lapply(polygon_coordinates,function(x){c(x[[1]][1],x[[2]][1])})))
+      
+      # use over from the sp package to identify selected items
+      selected_CS_wells <- CS_wells_coordinates %over% SpatialPolygons(list(Polygons(list(drawn_polygon),"drawn_polygon")))
+      #selected_Faluts <- transforms_ll %over% SpatialPolygons(list(Polygons(list(drawn_polygon),"drawn_polygon")))
+      
+      #print the name of the CS_wells
+      CS_wells[which(!is.na(selected_CS_wells)),"name"]
+    }
+    
+    # Select by Point ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    else if(feature_type=="circle") {
+      #get the coordinates of the center of the cirle
+      center_coords <- matrix(c(input$mainmap_draw_new_feature$geometry$coordinates[[1]],input$mainmap_draw_new_feature$geometry$coordinates[[2]]),ncol=2)
+      
+      #calculate the distance of the CS_wells to the center
+      dist_to_center <- spDistsN1(CS_wells_coordinates,center_coords,longlat=TRUE)
+      
+      #select the CS_wells that are closer to the center than the radius of the circle
+      CS_wells[dist_to_center < input$mainmap_draw_new_feature$properties$radius/1000,"name"]
+    }
+    
+    # Select By Line ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    else if(feature_type=="polyline") {
+      #get the coordinates of the polygon
+      polyline_coordinates <- input$mainmap_draw_new_feature$geometry$coordinates
+      polyline_coordinates_mt <- Reduce(rbind,polyline_coordinates)
+      polyline_coordinates_df <-as.matrix.data.frame(polyline_coordinates_mt)
+      #transform them to an sp polyline
+      drawn_polyline <- mapview::coords2Lines(polyline_coordinates_df, ID = "A")
+      drawn_polygon <- gBuffer(drawn_polyline, width=0.001, byid=F)
+      drawn_polygon_prj=drawn_polygon
+      crs(drawn_polygon_prj) <- sp::CRS("+proj=longlat +datum=WGS84")
+      
+      # use over from the sp package to identify selected items
+      selected_CS_wells <- CS_wells_coordinates %over% drawn_polygon
+      selected_Faluts <- transforms_ll %over% drawn_polygon_prj
+      
+      # Build Input Parameters to th CS Model
+      CS_model_system = CS_wells[which(!is.na(selected_CS_wells)),]  %>% as.data.table() %>%
+        dplyr::left_join(.,as.data.frame(CS_wells_xy),by=c("name","LEVEL_DES")) %>%
+        subset(.,,c("name","LEVEL_DES","shd_id","X","Y","elv","comm","BOR_USE","SOURCE_DES","AQUIFER_CD","CELL_CD"))
+      
+      transforms_df <- as.data.frame(transforms_ll)[which(!is.na(selected_Faluts)),"ObjectID"] %>%
+        as.data.frame() %>% dplyr::rename(.,"ObjectID"=".")
+      if(NROW(transforms_df)==0){transforms<<-F}else{transforms=transforms_df}
+      
+      # Export the wells data to the prod path
+      write.csv(CS_model_system,paste0(input$Export_Path,"/CS_model_system.csv"),row.names = F)
+      write.csv(transforms_df,paste0(input$Export_Path,"/transforms_df.csv"),row.names = F)
+      
+      # print the name of the CS_wells
+      CS_model_system_des=subset(CS_model_system,,c("name","LEVEL_DES","comm","BOR_USE","AQUIFER_CD","CELL_CD"))
+      CS_model_system_des
+    }
+  })
+  # Rander Cross Section Model -----------------------------------------------------------------
+  observeEvent(input$Get, {
+    
+    output$cs_chart <- renderPlot({
+      withProgress(message = 'Calculation in progress',
+                   detail = 'This may take a while...', value = 0, {  for (i in 1:15) {
+                     incProgress(1/15)
+                     Sys.sleep(0.25)
+                   }
+                   })
+      # Load Lyers -----------------------------------------------------------------------------
+      CS_model_system=read.csv(paste0(input$Export_Path,"/CS_model_system.csv"))
+      transforms=read.csv(paste0(input$Export_Path,"/transforms_df.csv"))
+      #  load Parameters ----------------------------------------------------------------------
+      CS_Prameters<-list(
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%% MODEL PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        CS_model_system=CS_model_system,
+        title_CS=input$title_CS,
+        cs_id=input$cs_id,
+        CS_type=input$CS_type,
+        season=input$season,
+        measurement_year=input$measurement_year,
+        transforms=transforms,
+        Projection_Line=input$Projection_Line,
+        label_size=input$label_size,
+        Interval_between_labeles=input$Interval_between_labeles,
+        Lower_Limit=input$Lower_Limit,
+        Surface_Smooth=input$Surface_Smooth,
+        DEM_line_thickness=input$DEM_line_thickness,
+        Use_tamplate =input$Use_tamplate,
+        Dynamic_Background =input$Dynamic_Background,
+        Dynamic_Background_Base_layer = input$Dynamic_Background_Base_layer,
+        Virtual_Wells=input$Virtual_Wells,
+        Prodact_path=input$Export_Path
+        #%%%%%%%%%%%%%%%%%%%%%%%%%%%%% MODEL PARAMETERS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+      )
+      
+      # Run Model -----------------------------------------------------------------------------
+      print(CS_model_system)
+      engine="G"
+      source(paste0(Background_path,'/CS_Model_V01/Code/Geohydrology_Confeg.R'))
+      source(paste0(Background_path,'/CS_Model_V01/Code/Geohydrology_Functions.R'), encoding = 'UTF-8')
+      source(paste0(Background_path,"/Geohydrology/Apps/CS_Model_V01/CS_Model_Code_V3.R"), encoding = 'UTF-8')
+      tictoc::tic()
+      cs_chart=cs_model(in_param=CS_Prameters)
+      tictoc::toc()
+      
+      cs_chart
+    })
+    print("DONE")
+  })
+  # End of Server
+}
+
+shinyApp(ui, server)

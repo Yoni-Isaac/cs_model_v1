@@ -1,0 +1,9 @@
+type,mssg
+,
+Digital Terrain Model (contours),Uploading the contour layer will be done using a shp file. Please be sure to load all four files of the layer.  The CRS will be automatically adapted to WGS84.
+Digital Terrain Model (raster),Uploading the raster fill will be done using a tiff file. The CRS will be automatically adapted to WGS84
+Point infrastructure (csv),Uploading the Layer as csv file with X|Y|name Fields. The CRS will be automatically adapted to WGS84
+Spatial Infrastructure (roads/tunnel buildings etc.),Inactive
+Geological layer (raster),Uploading the raster fill will be done using a tiff file. The CRS will be automatically adapted to WGS84
+Geological Model (.zip),Inactive
+Geological Model (.ncdf),Inactive

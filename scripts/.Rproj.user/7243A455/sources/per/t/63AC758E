@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1591678912352.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1840941446",
+    "id" : "63AC758E",
+    "lastKnownWriteTime" : 1591646774,
+    "last_content_update" : 1591646774,
+    "path" : "G:/Layers/Geohydrology/Geohydrology/Apps/CS_Model_V01/scripts/CS_Model_Code_V3.R",
+    "project_path" : "CS_Model_Code_V3.R",
+    "properties" : {
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

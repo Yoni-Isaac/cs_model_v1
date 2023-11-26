@@ -1,0 +1,929 @@
+#  Cross Section Model ########################################################################################
+message("Cross Section Model")
+  # 0.linitiation ===============================================================================================
+  message("0.linitiation")
+  # 0.1 Get Running Parameters ----------------------------------------------------------------------------------
+  message("0.1 Get Running Type")
+  
+  Background_path="G:/Layers/Geohydrology"
+
+#aa=cs_model(in_param="t")
+cs_model<- function(in_param)
+{
+
+  # 1. Get Data ==========================================================================================
+  message("1.Get Data")
+  
+  # 1.1 GIS Data -----------------------------------------------------------------------------------------
+  message("1.1 GIS Data")
+  
+  # 1.1.1 GIS Data - test ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  if(in_param=="t"){
+    Prodact_path=paste0(Background_path,"/CS_Model_V01/Products/temp")
+    message("1.1.1 GIS Data - test")
+    
+    CS_model_system=read.csv("G:/Layers/Geohydrology/CS_Model_V01/Products/temp/CS_model_system.csv")
+    Virtual_Wells=as.character("FALSE") # paste0(Background_path,'/CS_Model_V01/Code/Tests_Elements/Virtual_Wells_Test.shp')
+    season="w"
+    measurement_year=FALSE #"2015"
+    title_CS="Test CS"
+    cs_id="A"
+    well_id="name"
+    CS_type="groups"
+    transforms=read.csv("G:/Layers/Geohydrology/CS_Model_V01/Products/temp/transforms_df.csv")
+    Projection_Line=FALSE # paste0(Background_path,'/CS_Model_V01/Code/Tests_Elements/Geology_Description_Test.shp')
+    Background_layers=TRUE
+    label_size=30
+    Interval_between_labeles=300
+    Lower_Limit=-1000
+    Surface_Smooth=1.2
+    DEM_line_thickness=0.2
+    Export=TRUE
+    Save_as_PowerPoint=paste0(Background_path,'/CS_Model_V01/Products/hydrology_cs.pptx')
+    Use_tamplate =TRUE
+    Dynamic_Background =paste0(Background_path,'/CS_Model_V01/Background_layers/DEMs/DEMs_dynamic')
+    Dynamic_Background_Base_layer =paste0(Background_path,'/CS_Model_V01/Background_layers/DEMs/YAKENI_top.tif')
+  }
+  
+  # 1.1.2 GIS Data - Serves Application ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  if(in_param!="t"){
+    message("1.1.3 GIS Data - app Application")
+    
+    # Default Elemnts
+    well_id="name"
+    
+    # Basic Parameter
+    CS_model_system=in_param$CS_model_system
+    title_CS=as.character(in_param$title_CS)
+    CS_type=in_param$CS_type
+    Export=T ; Prodact_path=in_param$Prodact_path
+    Save_as_PowerPoint=T
+    
+    # Advance Parameters
+    season=in_param$season
+    measurement_year=in_param$measurement_year
+    cs_id=as.character(in_param$cs_id)
+    Background_layers=T
+    Dynamic_Background =in_param$Dynamic_Background
+    Dynamic_Background_Base_layer =in_param$Dynamic_Background_Base_layer
+    transforms=in_param$transforms
+    # Deliverable Properties
+    label_size=in_param$label_size
+    Interval_between_labeles=in_param$Interval_between_labeles
+    Lower_Limit=in_param$Lower_Limit
+    Surface_Smooth=in_param$Surface_Smooth
+    DEM_line_thickness=in_param$DEM_line_thickness
+    Use_tamplate =in_param$Use_tamplate
+    
+    #Inactive Elements
+    Projection_Line=in_param$Projection_Line
+    Virtual_Wells=in_param$Virtual_Wells
+  }
+  # 1.2 Background layers --------------------------------------------------------------------------------
+  message("1.2 Background layers")
+  
+  # 1.2.1 DEMs - Static ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("1.2.1 DEMs - Static")
+  
+  # DEM files Registration
+  dem_pth=paste(Background_path,"CS_Model_V01/Background_layers/DEMs/",sep = "/")
+  DEMs.files_pth = list.files(path=dem_pth,pattern =".tif$", full.names=T)
+  DEMs.files_nms = list.files(path=dem_pth,pattern =".tif$", full.names=F) %>% str_remove(.,".tif")
+  DEMs.files_full=cbind(DEMs.files_pth,DEMs.files_nms) %>% as.data.frame() %>%
+    dplyr::rename(.,"pth"="DEMs.files_pth","name"="DEMs.files_nms") %>%
+    mutate(pth=as.character(pth))
+  DEMs.files= dplyr::filter(DEMs.files_full,!grepl("DTM",name)) 
+  
+  # Get DTM
+  DTM_pth=as.character(dplyr::filter(DEMs.files_full,grepl("DTM",name))$pth) 
+  DTM_rst=raster(DTM_pth)
+  
+  # Get Static DEMs
+  if(Background_layers==TRUE){
+    
+    # insert DEMs files to list
+    DEMs.list=list()
+    for(i in 1:NROW(DEMs.files)){
+      DEM_pth=as.character(DEMs.files[i,]$pth) 
+      DEM=raster(DEM_pth)
+      assign(names(DEM), DEM)
+      DEMs.list[i]=DEM
+    }
+    static_DEM_i=i
+    
+    # Test.2 - Static DEMs List of Metas Data ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    message("Test.2 - Static DEMs List of Metas Data")
+    Const_Raster_metadata=list_meta_data(DEMs.list,"rasters",c("names","xmin","xmax","ymin","ymax","min","max"))
+  }
+  
+  if(is.character(Dynamic_Background)==TRUE){
+    # 1.2.2 DEMs - Dynamic ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("1.2.2 DEMs - Dynamic")
+    D_DEMs.files_pth = list.files(path=Dynamic_Background,pattern =".tif$", full.names=T)
+    D_DEMs.files_nms = list.files(path=Dynamic_Background,pattern =".tif$", full.names=F) %>% str_remove(.,".tif")
+    D_DEMs.files=cbind(D_DEMs.files_pth,D_DEMs.files_nms) %>% as.data.frame() %>%
+      dplyr::rename(.,"pth"="D_DEMs.files_pth","name"="D_DEMs.files_nms") %>%
+      mutate(pth=as.character(pth))
+    
+    # Get the Dynamic Based layer
+    D_DEMs_Base=raster(Dynamic_Background_Base_layer)
+    names(D_DEMs_Base)="Base"
+    
+    # insert Dynamic DEMs files to list
+    D_DEMs.list=list()
+    for(i in 1:NROW(D_DEMs.files)){
+      D_DEM_pth=as.character(D_DEMs.files[i,]$pth)
+      DEM=raster(D_DEM_pth)
+      names(DEM)=paste0(names(DEM),"_Dynamic")
+      D_DEMs.list[i]=DEM
+    }
+  }
+  
+  
+  # 1.2.3 Wells ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("1.2.3 Wells")
+  
+  well_pth=paste0(Background_path,"/CS_Model_V01/Background_layers/Wells")
+  
+  Geology_Description =as.data.frame(read_excel(paste0(well_pth,"/Geology_Description.xlsx"),sheet = "Geology_Description",
+                                                col_types = c("text", "text", "numeric", "numeric",
+                                                              "numeric","text", "text", "text",
+                                                              "numeric", "numeric", "text", "text",
+                                                              "numeric", "text", "text", "numeric",
+                                                              "numeric","text"))) %>% mutate(well_id=as.character(name))
+  
+  perfortations =as.data.frame(read_excel(paste0(well_pth,"/Perforations.xlsx")),sheet = "Perforations",
+                               col_types = c("text", "text", "text", "numeric",
+                                             "numeric","numeric", "numeric", "text",
+                                             "text")) %>% mutate(well_id=as.character(name))
+  
+  Wl = as.data.frame(read.xlsx(paste0(well_pth,"/WL_Full_2000_1.xlsx"))) %>%  mutate(well_id=as.character(name))
+  Cl = as.data.frame(read.xlsx(paste0(well_pth,"/WQ_Full_2000_1.xlsx"))) %>%  mutate(well_id=as.character(name))
+  
+  # 1.3 Design elements - Colors, Logo and Others inputs -------------------------------------------------
+  message("1.3 Design elements - Colors, Logo and Others inputs")
+  
+  design_pth=paste0(Background_path,"/CS_Model_V01/Design_elements")
+  
+  # 1.3.1 Colour indexs - Static ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  INDEX = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V2.xlsm"),sheet = "Index"))
+  INDEX_DEMs = as.data.frame(read_excel(paste0(design_pth,"/INDEX_National_V2.xlsm"),sheet = "Index_DEMs"))
+  
+  # 1.3.2 Colour indexs - Dynamic ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("1.3.2 Colour indexs - Dynamic")
+  
+  if(is.character(Dynamic_Background)==TRUE){
+    Index_DEMs_Dynamic = data.frame(matrix(ncol = 4, nrow = 0))
+    x = c("D.E.Ms", "f_name", "f_colour","Colour_Expreation")
+    colnames(Index_DEMs_Dynamic) = x
+  }
+  
+  # 1.3.3 Hydrological Service logo ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("1.3.3 Hydrological Service logo")
+  
+  logo = jpeg::readJPEG(paste0(design_pth,"/logo.jpg"), native = TRUE) %>% rasterGrob(., interpolate=TRUE)
+  
+  # 2.layers Building =====================================================================================
+  message("2.layers Building")
+  
+  # 2.1  Wells Data maining - Base & Virtual, "op" & "t" Running Format -------------------------
+  message("2.1  Wells Layer  Base & Virtual, op & t Running Formt")
+  
+  Base_Wells_Layer="Not_Active"
+  if(NROW(CS_model_system)>0){
+    # 2.1.1 Real Cross Section ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.1.1 Real Cross Section")
+    
+    CS_model_system = subset( mutate(CS_model_system,well_id=as.character(name)),,well_id) %>% inner_join(.,Geology_Description,by="well_id")
+    
+    if(as.logical(Virtual_Wells)!=FALSE){
+      # 2.1.2 Combined Cross Section ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      message("2.1.2 Combined Cross Section")
+      
+      Virtual_Wells_df=as.data.frame(sf::as_Spatial(st_read(Virtual_Wells)))%>%mutate(well_id=as.character(name))
+      
+      common_cols=intersect(colnames(Virtual_Wells_df), colnames(CS_model_system))
+      CS_model_system=rbind(CS_model_system[, common_cols],Virtual_Wells_df[, common_cols])
+      
+    }
+    Base_Wells_Layer="Active"
+  }
+  
+  if(Base_Wells_Layer=="Not_Active"){
+    # 2.1.3 Virtual Cross Section ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.1.3 Virtual Cross Section")
+    Virtual_Wells_df=as.data.frame(sf::as_Spatial(st_read(Virtual_Wells)))%>%mutate(well_id=as.character(name))
+    CS_model_system=Virtual_Wells_df
+  }
+  
+  CS_model_system = CS_model_system %>% mutate(depth=top_layer,
+                                               top_layer=elv-top_layer,
+                                               bot_layer=elv-bot_layer)
+  # 2.2 Wells layer ------------------------------------------------------------------
+  message("2.2 Wells layer")
+  
+  # 2.2.1 remove doplicates ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.2.1 remove doplicates")
+  
+  CS_model_system_unit=CS_model_system %>% group_by(well_id,name,X,Y)%>%
+    summarise(top=max(top_layer),
+              bot=min(bot_layer))%>%
+    ungroup()%>%
+    dplyr::arrange(.,X)
+  
+  # 2.2.2 Biuld Distance vector ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.2.2 Biuld Distance vector")
+  
+  dst =CS_model_system_unit %>%
+    subset(.,,c("X","Y")) %>% pointDistance(., lonlat=F) %>% .[,1]
+  
+  dst_unit=cbind(subset(CS_model_system_unit,,"well_id"),dst) %>% arrange(dst)
+  
+  
+  # 2.2.3 set geo_DB ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.2.3 set geo_DB")
+  
+  CS_model_system_XY = dst_unit %>% arrange(dst) %>%
+    left_join(CS_model_system,.,by="well_id")
+  
+  # 2.2.5 set General layer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.2.4 set General layer")
+  
+  CS_model_system_unit_dst=CS_model_system_unit %>% left_join(.,dst_unit,by="well_id")
+  
+  # 2.3 perfortations layer ------------------------------------------------------------
+  message("2.3 perfortations layer")
+  
+  perfortations_CS =  subset(CS_model_system_unit,,c("well_id"))  %>% inner_join(.,perfortations,by="well_id") %>%
+    left_join(.,dst_unit,by="well_id")
+  
+  # 2.4 WL and Cl layer ----------------------------------------------------------------
+  message("2.4 WL and Cl layer")
+  
+  # 2.4.1 Wl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.4.1 Wl")
+  
+  # Optional - Specific year - seasonal WL values
+  if(is.character(season)==TRUE){
+    if(season=="w"){
+      Wl=Wl %>% dplyr::filter(.,month_>0 & month_<6)}
+    if(season=="s"){
+      Wl=Wl %>% dplyr::filter(.,month_>8 & month_<12)}
+  }
+  
+  # Default - Laset year
+  WL_y=Wl %>% group_by(well_id) %>% summarise(wl=last(WL),
+                                              wl_year=last(year_))
+  
+  # Optional - Specific year
+  if(is.character(measurement_year)==TRUE){
+    WL_y=Wl %>% subset(.,year_==measurement_year,) %>% group_by(well_id) %>% summarise(wl=last(WL),
+                                                                                       wl_year=last(year_))
+  }
+  wl_CS =  subset(CS_model_system_unit,,c("well_id"))  %>% inner_join(.,WL_y,by="well_id") %>%
+    left_join(.,dst_unit,by="well_id")
+  
+  
+  # 2.4.2 Cl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.4.2 Cl")
+  
+  # Optional - Specific year - seasonal WL values
+  
+  if(is.character(season)==TRUE){
+    if(season=="w"){
+      Cl=Cl %>% dplyr::filter(.,month_>0 & month_<6)}
+    if(season=="s"){
+      Cl=Cl %>% dplyr::filter(.,month_>8 & month_<12)}
+  }
+  
+  
+  # Default - Laset year
+  Cl_y=Cl %>% group_by(well_id) %>% summarise(cl=last(Cl),
+                                              cl_year=last(year_))
+  
+  # Optional - Specific year
+  if(is.character(measurement_year)==TRUE){
+    Cl_y=Cl%>% subset(.,year_==measurement_year,) %>% group_by(well_id) %>% summarise(cl=last(Cl),
+                                                                                      cl_year=last(year_)) # Default - Laset year
+  }
+  
+  cl_CS =  subset(CS_model_system_unit,,c("well_id"))  %>% inner_join(.,Cl_y,by="well_id") %>%
+    left_join(.,dst_unit,by="well_id")
+  
+  cl_0=mean(CS_model_system_unit$bot)
+  
+  # 2.4.3 WLCl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.4.3 WLCl")
+  
+  wlcl_CS=full_join(wl_CS,cl_CS, by = c("well_id", "dst")) %>%
+    left_join(.,subset(CS_model_system_unit,,c("well_id","bot","top")), by = "well_id") %>%   # Set cl position in the CS
+    mutate(cl_location=ifelse(is.na(wl)==T,rowMeans(cbind(top,bot),na.rm=T),wl),
+           wl=as.numeric(wl))
+  
+  # 2.5 Biuld line of points along the CS ----------------------------------------------------
+  message("2.5 Biuld line of points along the CS")
+  
+  point_line(CS_model_system_unit) # input for the DEM and the  Transforms layers
+  
+  # 2.6 DEM layers - Static ------------------------------------------------------------------
+  message("2.6 DEM layers - Static")
+  
+  # 2.6.1 Build Topo DTM ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.6.1 Build Topo DTM")
+  
+  pl_pth=paste0(Background_path,"/CS_Model_V01")
+  DEM_polyline(vectort,DTM_rst,pl_pth)
+  assign(names(DTM_rst), DEM_CS_dst)
+  
+  # 2.6.2 Build all DEMs Lines ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("2.6.2 Build all DEMs Lines")
+  
+  DTM=data.frame(DTM)
+  DEMs=data.frame(DTM)                                                  #  Popolate first DEM by the DTM
+  
+  # Surface smooth by movin average
+  if(is.numeric(Surface_Smooth)==TRUE){
+    maDTM=ma(DEMs$DTM,Surface_Smooth);colnames(maDTM)=c('maDTM')
+    DEMs=cbind(DEMs,maDTM) %>% mutate(DTM=maDTM)
+    DEMs=dplyr::select(DEMs,-starts_with("maDTM"))
+  }
+  
+  if(Background_layers==TRUE){
+    for(i in 1:static_DEM_i){                                     #  Add rasters by loop
+      DEM_polyline(vectort,DEMs.list[[i]],pl_pth)  #  Intersect raster values by the CS line
+      # Intersect DEM by upper limit of topography
+      ma_DEM=ma(as.numeric(DEM_CS_dst[,4]),if(is.numeric(Surface_Smooth)==TRUE){Surface_Smooth}else{2})   #  Smooth DEMs by moving avrage
+      a=bind_cols(as.data.frame(DEMs$DTM),as.data.frame(ma_DEM));colnames(a)<-c("DTM","DEM")
+      b=within(a, uplimit <- DEM>DTM|is.na(DEM)==TRUE)
+      setDT(b);b[ uplimit==TRUE |is.na(uplimit)==TRUE, DEM := NA ]
+      
+      
+      DEMs=bind_cols(DEMs,as.data.frame(b$DEM))              #  Biuld DEMs data frame
+      colnames(DEMs)[ncol(DEMs)] <- names(DEMs.list[[i]])
+    }
+  }
+  
+  # 2.7 DEM layers - Dynamic ------------------------------------------------------------------
+  message("2.7 DEM layers - Dynamic")
+  
+  if(is.character(Dynamic_Background)==TRUE){
+    
+    # 2.7.1 build Base layer line ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.7.1 build Base layer line")
+    
+    DEM_polyline(vectort,D_DEMs_Base,pl_pth)
+    DEMs=bind_cols(DEMs,as.data.frame(DEM_CS_dst[,4])) ;colnames(DEMs)[ncol(DEMs)] = "Base"
+    
+    # 2.7.2 Build all DEMs Lines - Dynamic ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.7.2 Build all DEMs Lines - Dynamic")
+    
+    for(i in 1:length(D_DEMs.list)){                            #  Add rasters by loop
+      print(i)
+      DEM_polyline(vectort,D_DEMs.list[[i]],pl_pth)  #  Intersect raster values by the CS line
+      # Intersect DEM by the base layer
+      ma_DEM=ma(as.numeric(DEM_CS_dst[,4]),if(is.numeric(Surface_Smooth)==TRUE){Surface_Smooth}else{2})   #  Smooth DEMs by moving avrage
+      a=bind_cols(as.data.frame(DEMs$Base),as.data.frame(ma_DEM));colnames(a)<-c("Base","DEM")
+      b=within(a, uplimit <- DEM<Base|is.na(DEM)==TRUE)
+      setDT(b);b[ uplimit==TRUE |is.na(uplimit)==TRUE, DEM := NA ]
+      
+      DEMs=bind_cols(DEMs,as.data.frame(b$DEM))             #  Biuld DEMs data frame
+      colnames(DEMs)[ncol(DEMs)] <- names(DEMs.list[[i]])
+    }
+    DEMs=melt(as.data.frame(DEMs),id=c("X","Y","cells","dst"))    #  Preper data to ggplot
+    DEMs=DEMs %>% mutate(D.E.Ms = variable) %>% inner_join(.,DTM,by="dst")%>%mutate(Depth=DTM-value)
+    
+    # 2.7.3 Set Dynamic Index_DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.7.3 Set Dynamic Index_DEMs")
+    
+    for(j in 1:length(D_DEMs.files)){
+      Index_DEMs_Dynamic[j,1]=names(DEMs.list[[j]])
+      Index_DEMs_Dynamic$f_name[j]=names(DEMs.list[[j]])
+      #  Water Level DEM
+      if(is.na(str_locate(Index_DEMs_Dynamic[j,1], "Water_Levels")[1])==F){
+        Index_DEMs_Dynamic$f_colour[j]=as.character(paste0("#",10,10*j,"ff"))}
+      # Another dynamic DEM
+      else{Index_DEMs_Dynamic$f_colour[j]=as.character(paste0("#",sample(50:99, 1),sample(10:50, 1),10))} 
+      Index_DEMs_Dynamic$Colour_Expreation[j]=paste0(names(DEMs.list[[j]])," = ",Index_DEMs_Dynamic$f_colour[j])
+    }
+    
+    # 2.7.4 Set Dynamic cols_DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.7.4 Set Dynamic cols_DEMs")
+    
+    cols_DEMs_dynamic=c()
+    cols_DEMs=ColourExpreation_DEM()
+    for(j in 1:length(D_DEMs.files)){
+      f_colour=Index_DEMs_Dynamic$f_colour[j]
+      cols_DEMs_dynamic[j]=c(temp_name = f_colour)
+      names(cols_DEMs_dynamic)[j] <- Index_DEMs_Dynamic[j,1]
+    }
+    
+    # 2.7.5 Combine Dynamic to Static ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("2.7.5 Combine Dynamic to Static")
+    
+    INDEX_DEMs=bind_rows(INDEX_DEMs,Index_DEMs_Dynamic)
+    cols_DEMs=c(cols_DEMs,cols_DEMs_dynamic)
+  }
+  
+  if(NROW(transforms)>0){
+    # 2.8 Transforms layer ---------------------------------------------------------------------------
+    message("2.8 Transforms layer")
+    
+    # 2.8.1 Build transform matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    trs_pth=if(Type_of_runing=="web"){Background_path}else{paste0(Background_path,"/CS_Model_V01/Background_layers")}
+    geo_transform(vectort,transforms,50,trs_pth)
+    
+    # 2.8.2 convert transform matrix to df ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    transforms_df<-as.data.frame(transforms_matrix)
+    
+    colnames(transforms_df) <- c("dst","X","Y")
+    
+    # 2.8.3 define the distance function ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    d <- function(x,y) abs(x-y)
+    
+    # 2.8.4 find matches to DEM Polyline ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    idx <- sapply( transforms_df$dst, function(x) which.min( d(x,DTM$dst) ))
+    
+    # 2.8.5 Set matches to DEM Polyline ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    transforms_DEM<-cbind(transforms_df,DTM[idx,-1,drop=FALSE]$DTM);colnames(transforms_DEM) <- c("dst","X","Y","DTM")
+    T_alpha=0.5
+    
+  }
+  
+  if(NROW(transforms)==0){
+    # 2.8.2 Transforms layer - Inactive ---------------------------------------------------------------
+    message("2.8.2 Transforms layer- Inactive")
+    transforms_DEM=data.frame(X=CS_model_system_unit_dst$X[1],
+                              Y=CS_model_system_unit_dst$Y[1],
+                              DTM=CS_model_system_unit_dst$top[1],
+                              dst=0) # 2595.072
+    T_alpha=0
+  }
+  
+  # 2.9 Projection Line layer ---------------------------------------------------------------------
+  message("2.9 Projection Line layer")
+  
+  if(is.character(Projection_Line)==TRUE){
+    message("Projection line")
+    
+    # 2.9.1 Get Projection Line ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Projection_sp = arc.open(Projection_Line) %>% arc.select(., '*') %>%
+      arc.shape(.) %>% arc.shape2sp(.)
+    
+    # 2.9.2 Convert to df ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    Projection_df <- SpatialLinesDataFrame(Projection_sp, data.frame(id=1:length(Projection_sp)))
+    
+    # 2.9.3 Get distanse from wells ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    geo_Projection(Projection_sp,Projection_df,CS_model_system_unit_dst,100)
+    
+    T_alpha=0.5
+    
+  }
+  
+  
+  if(is.character(Projection_Line)==FALSE){
+    
+    Projection_dst_2=data.frame(well_id=0,X=0, Y=0, dst=0, bot=0, Projection_dst_min=0, ID=0, Xproj=0, Yproj=0, deltaX=0, deltaY=0, Orientation=0)
+    T_alpha=0
+  }
+  
+  # 3. Cross Section Elemints Creation  ==================================================
+  message("3. Cross Section Elemints Creation")
+  
+  # 3.1 Set Dimensions -----------------------------------------------------------------------
+  message("3.1 Set Dimensions")
+  
+  # 3.1.1 Horizontal Dimensions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("3.1.1 Horizontal Dimensions")
+  
+  prop_fac=max(CS_model_system_XY$dst)*length(CS_model_system_unit)/700
+  n_wells=NROW(CS_model_system_unit)
+  
+  # 3.1.2 Vertical Dimensions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("3.1.2 Vertical Dimensions")
+  
+  max_DEM=max(DTM$DTM,na.rm = T)                             # Topographic max
+  delta_y=abs(max(DTM$DTM,na.rm = T)-min(DTM$DTM,na.rm = T)) # Gradient max
+  max_depth=max(abs(CS_model_system_XY$depth))               # Wells depth max
+  total_max=max(delta_y,max_depth)                           # Total max
+  prop_fac_y=max_depth/(delta_y*100)
+  
+  
+  # 3.1.4 User Definitions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("3.1.4 User Definitions")
+  
+  ls=as.numeric(as.character(label_size))                      # label size
+  space=as.numeric(as.character(Interval_between_labeles))     # Interval between labeles
+  
+  # 3.2 set Orientation ------------------------------------------------------------------------
+  message("3.2 set Orientation")
+  
+  # 3.2.1 Defoltives values ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("3.2.1 Defoltives values")
+  
+  diraction_start="SW"
+  diraction_end="NE"
+  
+  # 3.2.2 Revers diractions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("3.2.2 Revers diractions")
+  
+  if (CS_model_system_XY$Y[nrow(CS_model_system_XY)]<CS_model_system_XY$Y[1]){diraction_start="NW";
+  diraction_end="SE"}
+  
+  # 3.2.3 Extreme diractions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("3.2.3 Extreme diractions")
+  
+  diractoin_fun=(max(CS_model_system_XY$X)-min(CS_model_system_XY$X))/max(dst)
+  
+  if (diractoin_fun>0.9){diraction_start="W";
+  diraction_end="E"}
+  if (diractoin_fun<0.1){diraction_start="S";
+  diraction_end="N"}
+  
+  # 3.3 Set Colours ---------------------------------------------------------------------------
+  message("3.3 Set Colours")
+  
+  INDEX1=INDEX %>% filter(.,type==CS_type) 
+  # Select CS type
+  f_ID_df <-data.frame(CS_model_system_XY[which(names(CS_model_system_XY)%in%CS_type)]) %>%
+    dplyr::rename(.,"f_ID"=CS_type)
+  CS_f_ID=cbind(CS_model_system_XY,f_ID_df)
+  CS_model_system_XY=CS_f_ID%>% inner_join(.,INDEX1,by="f_ID")                        # attribut color to formation 
+  cols=ColourExpreation()                                                             # Get colour vector for scale_fill_manual
+  
+   
+  # CS_model_system_XY=CS_model_system_XY %>% mutate(f_ID=as.character(.[[CS_type]]))
+  # CS_model_system_XY=CS_model_system_XY%>% inner_join(.,INDEX1,by="f_ID")             
+  
+  # 3.3.1 Set DEMs Colours ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  message("3.3.1 Set DEMs Colours")
+  
+  if(Background_layers==TRUE){
+    DEMs=DEMs%>% inner_join(.,INDEX_DEMs,by="D.E.Ms")
+    if(is.character(Dynamic_Background)==FALSE){cols_DEMs=ColourExpreation_DEM()}
+  }
+  
+  # 3.4 Build Legand ---------------------------------------------------------------------------
+  message("3.4 Build Legand")
+  legand_df=subset(CS_model_system_XY,,c("f_name","MainDatabaseCode"))
+  dp=duplicated(legand_df$f_name)
+  legand_dp=legand_df[!dp,]
+  legand_str=dplyr::arrange(legand_dp,MainDatabaseCode)
+  legand_elment=legand_str$f_name
+  
+  # 3.5 Set Formation Switch ------------------------------------------------------------------
+  message("3.5 Set Formation Switch")
+  
+  CS_model_system_formation=CS_model_system_XY %>% group_by(well_id)%>%
+    mutate(top_well=max(top_layer))%>% ungroup(.)%>%
+    group_by(well_id,name,f_name,X,Y,dst,top_well)%>%
+    summarise(Elevation=min(bot_layer)) %>% ungroup(.)%>%
+    dplyr::arrange(.,well_id,desc(Elevation))%>%
+    mutate(Depth=as.character(top_well-Elevation),
+           Thickness=ifelse(well_id==lag(well_id),as.numeric(Depth)-lag(as.numeric(Depth)),as.numeric(Depth)))%>%
+    mutate(Distance=dst+prop_fac/2)
+  
+  # 4 Cross Section Bulding  =================================================================================
+  message("4.  Cross Section Bulding")
+  
+  if(is.character(Export)==FALSE){
+    
+    # 4.1 Labels and Data Fixing -----------------------------------------------------------------------
+    message("4.1 Labels and Data Fixing")
+    
+    # 4.1.1 Labels Fixing ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("4.1.1 Labels Fixing")
+    
+    wl_CS=wlcl_CS%>% mutate(Water_Level=wl,
+                            Year=wl_year,
+                            Distance=dst-prop_fac*1.7)
+    
+    wq_CS=wlcl_CS%>% mutate(Concentration=cl,
+                            concentration_l=cl-max(wl),
+                            Year=cl_year,
+                            Distance=dst+prop_fac*1.7)
+    
+    CS_model_system_XY=CS_model_system_XY %>% left_join(.,subset(CS_model_system_formation,,c(well_id,Elevation,Depth,f_name,Thickness)),by=c("well_id","f_name"))%>%
+      mutate(Unit_Name=f_name)
+    
+    DTM_plot_df <- na.omit(dplyr::filter(DEMs,Depth==0))%>% mutate(Distance=dst,Unit_Name=as.factor(f_name),Elevation=value)
+    DEM_plot_df <- na.omit(dplyr::filter(DEMs,Depth>0))%>% mutate(Distance=dst,Unit_Name=as.factor(f_name),Elevation=value)
+    
+    # 4.1.2 Build DEMs Legand ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("4.1.2 Build DEMs Legand")
+    if(Background_layers==TRUE){
+      
+      DEMs_Legand=DEM_plot_df %>% group_by(f_name,f_colour,Colour_Expreation,D.E.Ms) %>%
+        dplyr::summarise(m_dst=mean(dst,na.rm=T),
+                         m_elv=mean(value,na.rm=T)) %>%
+        mutate(legand_DEMS=str_replace_all(D.E.Ms, "_", " "))
+    }
+    
+    # 4.1.3 Dimention Fixing ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("4.1.3 Dimention Fixing")
+    
+    total_min=round(min(CS_model_system_XY$Elevation,na.rm = T), digits = -2)
+    
+    if(Background_layers==TRUE){
+      total_min=round(min(total_min,min(DEM_plot_df$Elevation,na.rm = T)),digits = -2)
+    }
+    
+    # 4.1.4 Data Fixing ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("4.1.4 Data Fixing")
+    
+    perforation_alpha=1
+    if(max(perfortations_CS$dst)==-Inf){
+      perfortations_CS=CS_model_system_XY%>% dplyr::filter(.,top_layer==max(top_layer)) %>%
+        mutate(bot_e=bot_layer,
+               top_e=top_layer,
+               dim=NA,
+               type=NA)
+      perforation_alpha=0}
+    
+    wl_alpha=1
+    if(max(wl_CS$Distance)==-Inf){
+      wl_CS=CS_model_system_XY%>% dplyr::filter(.,top_layer==max(top_layer)) %>%
+        mutate(Distance=dst,
+               Water_Level=bot_layer,
+               Year=NA)
+      wl_alpha=0}
+    
+    wq_alpha=1
+    if(max(wq_CS$Distance)==-Inf){
+      wq_CS=CS_model_system_XY%>% dplyr::filter(.,top_layer==max(top_layer)) %>%
+        mutate(Distance=dst,
+               Concentration=top_layer,
+               Year=NA)
+      wq_alpha=0}
+    
+    
+    # 4.2 Cross section Creation ----------------------------------------------------------
+    message("4.2 Cross section Creation")
+    
+    # Base ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    p_edit = ggplot()
+    p_edit = p_edit +
+      #DEMs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_point(data=DEM_plot_df,size=0.1, aes(x=Distance,y=Elevation,colour=Unit_Name,label=Depth)) +
+      scale_colour_manual(values=cols_DEMs)+
+      
+      #DTM ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_line(data=DTM_plot_df,aes(x=Distance,y=Elevation),colour = "black")+
+      #Formation and location ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_rect(data =CS_model_system_XY,aes(xmin = dst, xmax = dst+prop_fac, ymin = bot_layer, ymax = top_layer,label=Thickness,size=Depth,fill=Unit_Name))+
+      scale_fill_manual(values =cols)+
+      #Perforations ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_rect(data = as.data.frame(perfortations_CS),
+                aes(xmin = dst+prop_fac*1.3, xmax = dst+prop_fac*1.6, ymin = bot_e, ymax = top_e), fill ="black",alpha=perforation_alpha)+
+      # wl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_point(data =wl_CS, fill ="blue",shape=25,size = 0.1*ls,alpha=wl_alpha,aes(x = Distance,y=Water_Level,label=Year))+
+      geom_text(data =wl_CS, colour ="blue",size = 0.1*ls,alpha=wl_alpha,aes(x = Distance,y=Water_Level+0.15*space,label = round(Water_Level,0)))+
+      # cl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data =wq_CS, colour ="red",size = 0.1*ls,alpha=wq_alpha,aes(x = Distance,y=cl_0+Concentration,label = round(Concentration,0)))+
+      geom_point(data =wq_CS, fill ="red",shape=25,alpha=wq_alpha,size = 0.00001*ls,aes(label=Year,x = Distance,y=cl_0+Concentration))+
+      # Transforms ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_rect(data=na.omit(transforms_DEM),aes(xmin = dst, xmax = dst+prop_fac*0.1,ymin=DTM-max(abs(CS_model_system_XY$bot_layer)),ymax=DTM),color="darkgray",size=0.3,alpha=T_alpha)+
+      geom_rect(data=na.omit(transforms_DEM),aes(xmin = dst-prop_fac*0.1-50, xmax = dst-50,ymin=DTM-max(abs(CS_model_system_XY$bot_layer)*0.60),ymax=DTM-max(abs(CS_model_system_XY$bot_layer)*0.40)),color="darkgray",size=0.3,alpha=T_alpha)+
+      geom_rect(data=na.omit(transforms_DEM),aes(xmin = dst+50, xmax = dst+prop_fac*0.1+50,ymin=DTM-max(abs(CS_model_system_XY$bot_layer)*0.70),ymax=DTM-max(abs(CS_model_system_XY$bot_layer)*0.50)),color="darkgray",size=0.3,alpha=T_alpha)+
+      # Projection Line ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = Projection_dst_2,
+                aes(x = dst,y=bot-0.5*space,label =paste0(Orientation," ",round(Projection_dst_min,0)," m")), colour ="black",size = 0.07*ls,alpha=T_alpha,fontface="italic")+
+      
+      # General elmeants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      # cs_id ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = min(dst)-prop_fac_y*5,y=max_DEM+1.4*space,label =cs_id), colour ="black",size =0.1*ls,vjust = "inward")+
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = max(dst)+prop_fac_y*5,y=max_DEM+1.4*space,label =paste0(cs_id,"'")),colour ="black",size =0.1*ls,vjust = "inward")+
+      # Diraction ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = min(dst)-prop_fac_y*5,y=max_DEM+1.2*space,label =diraction_start), colour ="black",size = 0.1*ls,vjust = "inward")+
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = max(dst)+prop_fac_y*5,y=max_DEM+1.2*space,label =diraction_end), colour ="black",size = 0.1*ls,vjust = "inward")+
+      # X/Y ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = min(dst)-prop_fac_y*5,y=max_DEM+0.9*space,label =paste0(min(X)," / ",min(Y))), colour ="black",size = 0.1*ls,vjust = "inward")+
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = max(dst)+prop_fac_y*5,y=max_DEM+0.9*space,label =paste0(max(X)," / ",max(Y))), colour ="black",size = 0.1*ls,vjust = "inward")+
+      
+      # Axis Labels  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      scale_x_continuous(breaks=seq(0, max(dst)+prop_fac_y*5, space*10))+
+      scale_y_continuous(breaks=seq(total_min-space, round(max_DEM+space, digits = 0), space))+
+      
+      # labels ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      labs(x="Distance [m]",y="Elevation [masl]")+
+      theme(axis.text=element_text(size=0.4*ls),
+            axis.text.x = element_text(colour="black",size=0.3*ls,angle=45,hjust=.5,vjust=.5,face="plain"),
+            axis.text.y = element_text(colour="black",size=0.3*ls,angle=0,hjust=.5,vjust=.5,face="plain"))+
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = max(dst)/2,y=max_DEM+space,label =title_CS), colour ="black",alpha=0.5,size =0.2*ls,vjust = "inward")+
+      # top ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = CS_model_system_unit,
+                aes(x = dst,y=top+0.1*space,label =round(top,0)), colour ="black",size =0.07*ls,alpha=0.9)+ # top
+      # bot ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = CS_model_system_unit,
+                aes(x = dst,y=bot-0.2*space,label =paste0("TD=",round(bot,0))), colour ="black",size = 0.07*ls,alpha=0.5)+
+      # name ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = CS_model_system_unit,
+                aes(x = dst,y=top+0.2*space,label =well_id), colour ="black",angle = 45,size =0.1*ls,alpha=0.9)
+    
+    # 4.3 Cross section Export ----------------------------------------------------------
+    message("4.3 Cross section Export")
+    
+    p_edit = ggplotly(p_edit)
+    htmlwidgets::saveWidget(p_edit,selfcontained = FALSE, file=paste0(Prodact_path,"/Interactive_CS",".html")) # ,"/CS_Model_V01/Products/Interactive/"
+  }
+  
+  
+  if(Export==TRUE){
+    # 4.4 Exportable Cross Section Creation ----------------------------------------------------------
+    message("4.4 Exportable Cross Section Creation")
+    p = ggplot(data =CS_model_system_XY)
+    # DEM ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if(Background_layers==TRUE){
+      p=p+
+        geom_path(data=dplyr::filter(DEMs,D.E.Ms!="DTM"),aes(group=factor(variable),x=dst,y=value,colour = D.E.Ms),size=DEM_line_thickness,alpha=0.9,linetype = 2)+
+        scale_colour_manual(values=cols_DEMs)
+      
+      p=p+
+        geom_line(data=na.omit(dplyr::filter(DEMs,D.E.Ms=="DTM")),aes(x=dst,y=value),size=DEM_line_thickness*1.5,colour = "black") # azure2,black
+      
+      # Background layers names
+      if(Background_layers==TRUE){
+        
+        p=p+
+          geom_text(data=DEMs_Legand,aes(x=m_dst,y=m_elv,label=legand_DEMS,fontface = "bold",alpha=0.1,colour = D.E.Ms,group = factor(D.E.Ms)),size = 0.1*ls) +
+          scale_colour_manual(values=cols_DEMs)
+      }
+    }
+    
+    if(Background_layers==FALSE){
+      p=p+
+        geom_line(data=na.omit(DEMs),aes(x=dst,y=DTM),
+                  #method = "lm", formula = y ~ splines::bs(x, 500),se=F,
+                  colour = "black")
+    }
+    
+    p = p +
+      # base - formation and location ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_rect(aes(xmin = dst, xmax = dst+prop_fac, ymin = bot_layer, ymax = top_layer,fill=f_name))+
+      scale_fill_manual(values =cols,name="Unit Name",breaks=legand_elment)+
+      # perforations ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_rect(data = as.data.frame(perfortations_CS),
+                aes(xmin = dst+prop_fac*1.3, xmax = dst+prop_fac*1.6, ymin = bot_e, ymax = top_e), fill ="black")+
+      # wl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_point(data =wlcl_CS,aes(x = dst-prop_fac*1.5,y=as.numeric(wl)), fill ="blue",shape=25,size = 0.1*ls)+ # signe
+      geom_label(data =wlcl_CS,aes(x = dst-prop_fac*1.5,y=as.numeric(wl)+0.25*space,label = round(as.numeric(wl),0)), colour ="blue",size = 0.1*ls,alpha=0.5)+ # value
+      # cl ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_label(data =wlcl_CS,aes(x = dst+prop_fac*1.5,y=cl_0+as.numeric(cl),label = round(as.numeric(cl),0)), colour ="red",size = 0.1*ls,alpha=0.5)+ # value
+      # General elmeants ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      # cs_id ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = min(dst)-prop_fac_y*5,y=max_DEM+1.4*space,label =cs_id), colour ="black",size =0.1*ls,vjust = "inward")+
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = max(dst)+prop_fac_y*5,y=max_DEM+1.4*space,label =paste0(cs_id,"'")),colour ="black",size =0.1*ls,vjust = "inward")+
+      # Diraction ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = min(dst)-prop_fac_y*5,y=max_DEM+1.2*space,label =diraction_start), colour ="black",size = 0.1*ls,vjust = "inward")+
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = max(dst)+prop_fac_y*5,y=max_DEM+1.2*space,label =diraction_end), colour ="black",size = 0.1*ls,vjust = "inward")+
+      # X/Y ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = min(dst)-prop_fac_y*5,y=max_DEM+0.9*space,label =paste0(min(X)," / ",min(Y))), colour ="black",size = 0.1*ls,vjust = "inward")+
+      geom_text(data = CS_model_system_unit_dst,
+                aes(x = max(dst)+prop_fac_y*5,y=max_DEM+0.9*space,label =paste0(max(X)," / ",max(Y))), colour ="black",size = 0.1*ls,vjust = "inward")+
+      
+      # Axis Labels  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      scale_x_continuous(breaks=seq(0, max(dst)+prop_fac_y*5, 1000))+
+      scale_y_continuous(breaks=seq(total_min-space, round(max_DEM+space, digits = 0), 100))+
+      
+      # labels ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      labs(x="Distance [m]",y="Elevation [masl]")+
+      theme(axis.text=element_text(size=0.4*ls),
+            axis.text.x = element_text(colour="black",size=0.3*ls,angle=45,hjust=.5,vjust=.5,face="plain"),
+            axis.text.y = element_text(colour="black",size=0.3*ls,angle=0,hjust=.5,vjust=.5,face="plain"))+
+      geom_label(data = CS_model_system_unit_dst,
+                 aes(x = max(dst)/2,y=max_DEM+space*1.4,label =title_CS), colour ="black",alpha=0.5,size =0.2*ls,vjust = "inward")
+    
+    
+    # Transforms ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if(is.character(transforms)==TRUE){
+      p=p+
+        geom_linerange(data=na.omit(transforms_DEM),aes(x=dst,ymin=DTM-max(abs(CS_model_system_XY$bot_layer)),ymax=DTM),color="darkgray",size=0.3,alpha=0.3)+
+        geom_linerange(data=na.omit(transforms_DEM),aes(x=dst-50,ymin=DTM-max(abs(CS_model_system_XY$bot_layer)*0.60),ymax=DTM-max(abs(CS_model_system_XY$bot_layer)*0.40)),color="darkgray",size=0.3,alpha=0.3)+
+        geom_linerange(data=na.omit(transforms_DEM),aes(x=dst+50,ymin=DTM-max(abs(CS_model_system_XY$bot_layer)*0.70),ymax=DTM-max(abs(CS_model_system_XY$bot_layer)*0.50)),color="darkgray",size=0.3,alpha=0.3)
+    }
+    # Projection Line ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if(is.character(Projection_Line)==TRUE){
+      p=p+
+        geom_label(data = Projection_dst_2,
+                   aes(x = dst,y=bot-0.5*space,label =paste0(Orientation," ",round(Projection_dst_min,0)," m")), colour ="black",size = 0.07*ls,alpha=0.5,fontface="italic")
+    }
+    # name, top and bot ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    p=p+
+      geom_label(data = CS_model_system_unit,
+                 aes(x = dst,y=top+0.3*space,label =round(top,0)), colour ="black",size =0.07*ls,alpha=0.9)+ # top
+      geom_label(data = CS_model_system_unit,
+                 aes(x = dst,y=bot-0.2*space,label =paste0("TD=",round(bot,0))), colour ="black",size = 0.07*ls,alpha=0.5)+ # bot
+      geom_text(data = CS_model_system_unit,
+                aes(x = dst,y=top+0.8*space,label =well_id), colour ="black",angle = 45,size =0.1*ls,alpha=0.9) # name
+    
+    # limit ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    logo_y=max_depth # Location for editable CS Section 4.5.1
+    if(is.numeric(Lower_Limit)==TRUE){
+      p=p+ylim(Lower_Limit,max_DEM+1.4*space)
+      logo_y=Lower_Limit
+    }
+    
+    
+    # Edit 25012020 #########################
+    # library(ggrepel)
+    # aaa=plotly_build(p)%>%layout(showlegend = F)
+    # length<-length(aaa$x$data)
+    # invisible(lapply(1:length, function(x) aaa$x$data[[x]]<<-c(aaa$x$data[[x]], textposition ='top center')))
+    # Edit 25012020 #########################
+    
+    # 4.5 Editable Cross section as .pptx -------------------------------------------------------------------
+    message("4.5 Editable Cross section as .pptx")
+    
+    if(Use_tamplate==FALSE){
+      # 4.5.1 full CS to pptx, raw CS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      message("4.5.1 full CS to pptx, raw CS")
+      
+      # Set logo Dimetions
+      if (logo_y<0){ logo_y=logo_y+3*delta_y}
+      
+      anno=annotation_custom(logo,
+                             xmin=max(CS_model_system_XY$dst)+prop_fac*11.2,xmax=max(CS_model_system_XY$dst)+prop_fac*45,
+                             ymin=logo_y-11*delta_y, ymax=logo_y+3*delta_y)
+      
+      # Create the viewports and bulding the CS with the logo
+      grid.newpage()
+      d=p+anno
+      
+      # Creat a virtual new pptx and set the CS as a new slide
+      doc <- read_pptx()
+      doc <- add_slide(doc, layout = "Title and Content", master = "Office Theme")
+      #doc <- officer::ph_with_gg(doc, value =print(d),location = ph_location_fullsize())
+      doc <- rvg::ph_with_vg_at(x=doc,  ggobj =d, left=0.1, top=0.1, width=9, height=6)
+      # Export to Exist pptx file
+      ppt_pth=paste0(Prodact_path,"/Editable_CS",".pptx")
+      print(doc, target = ppt_pth)
+      
+    }
+    if(Use_tamplate==TRUE){
+      # 4.5.2  CS to template pptx, by tamplate ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      message("4.5.2  CS to template pptx, by tamplate")
+      # Set regional template
+      rg=max(CS_model_system_unit$Y,na.rm=T)
+      
+      if (rg<=577000 & CS_type=="groups"){ region_temp="south_CS.pptx"}
+      else if (rg<=577000 & CS_type=="materials"){ region_temp="south_materials_CS.pptx"}
+      else if (rg>577000 & rg<=731000){ region_temp="central_CS.pptx"}
+      else {region_temp="north_CS.pptx"}
+      print(region_temp)
+      gg=p+theme(legend.position="NUN")
+      
+      ppt_pth=paste0(Background_path,"/CS_Model_V01/Code/Editable_format/")
+      doc <- read_pptx(path = paste0(ppt_pth,region_temp))
+      doc <- on_slide( doc, index = 1)
+      
+      #doc <- officer::ph_with_gg_at(x=doc, value = gg, left=0.1, top=0.1, width=7.5, height=6)
+      doc <- rvg::ph_with_vg_at(x=doc,  ggobj =gg, left=0.1, top=0.1, width=7.5, height=6)
+      print(doc, target = paste0(Prodact_path,"/Editable_CS",".pptx"))
+    }
+    
+    # 4.6 Additives -----------------------------------------------------------------------------
+    message("4.6 Additives")
+    
+    # 4.6.1 logo ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("4.6.1 logo")
+    
+    # 4.6.2 legend ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    message("4.6.2 legend")
+    legend <- g_legend(p) # Extract Legend
+    
+    grid.newpage()        #Create the viewports, push them, draw and go up
+    vp1 <- viewport(width = 0.75, height = 1, x = 0.375, y = .5)
+    vpleg <- viewport(width = 0.25, height = 0.5, x = 0.85, y = 0.75)
+    subvp <- viewport(width = 0.3, height = 0.4, x = 0.85, y = 0.25)
+    print(p + theme(legend.position="NUN"), vp = vp1)
+    
+    
+    
+    upViewport(0)
+    pushViewport(vpleg)
+    grid.draw(legend)
+    # 4.7 Cross section Export -----------------------------------------------------------------------------
+    message("4.7 Cross section Export")
+    
+    upViewport(0)         #Make the new viewport active and draw
+    pushViewport(subvp)
+    dev.new(grid.draw(logo))
+  }
+  # 5. Return Cross Section to the App ===================================================================================
+  message("5. Return Cross Section to the App")
+  cs_chart=p
+  return(cs_chart)
+  print("Cross Section was Successfully Completed")
+  gc()
+}
